@@ -1,0 +1,352 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  username          String    @unique
+  email             String    @unique
+  passwordHash      String
+  profilePic        String?
+  targetTrack       String
+  level             String
+  mode              String    @default("normal")
+  masteryPercent    Float     @default(0)
+  realityScore      Float     @default(0)
+  streakCurrent     Int       @default(0)
+  streakLongest     Int       @default(0)
+  tier              String    @default("developing")
+  trackRank         Int       @default(0)
+  trackRankTotal    Int       @default(0)
+  platformRank      Int       @default(0)
+  platformRankTotal Int       @default(0)
+  isActive          Boolean   @default(true)
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  batchMember           BatchMember?
+  tasks                 Task[]
+  testResults           TestResult[]
+  reflections           TaskReflection[]
+  realityScores         RealityScore[]
+  connectionsAsSender   Connection[]         @relation("SenderConnections")
+  connectionsAsReceiver Connection[]         @relation("ReceiverConnections")
+  groupMember           GroupMember?
+  notifications         Notification[]
+  aiInteractions        AIInteraction[]
+  harshLogs             HarshLog[]
+  codeSubmissions       CodeSubmission[]
+  sentMessages          Message[]
+  leaderboardHistory    LeaderboardHistory[]
+  globalLeaderboard     GlobalLeaderboard?
+
+  @@index([targetTrack, level])
+  @@index([tier])
+  @@index([platformRank])
+  @@index([trackRank, targetTrack])
+}
+
+model Batch {
+  id          String   @id @default(uuid())
+  batchCode   String   @unique
+  targetTrack String
+  level       String
+  startWeek   String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  members     BatchMember[]
+  groups      Group[]
+  messages    Message[]
+  leaderboard LeaderboardHistory[]
+
+  @@index([targetTrack, level])
+}
+
+model BatchMember {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  batchId          String
+  rank             Int      @default(0)
+  performanceScore Float    @default(0)
+  joinedAt         DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, performanceScore])
+}
+
+model Task {
+  id               String    @id @default(uuid())
+  userId           String
+  title            String
+  description      String
+  topic            String
+  dayNumber        Int
+  stepNumber       Int
+  level            String
+  estimatedMinutes Int
+  status           String    @default("pending")
+  hasCodeChallenge Boolean   @default(false)
+  starterCode      String?
+  allowedLanguages String[]  @default([])
+  timerStartedAt   DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reflection      TaskReflection?
+  testResults     TestResult[]
+  codeSubmissions CodeSubmission[]
+  testCases       TestCase[]
+
+  @@index([userId, status])
+  @@index([userId, dayNumber])
+}
+
+model TaskReflection {
+  id               String   @id @default(uuid())
+  userId           String
+  taskId           String   @unique
+  completed        Boolean
+  hoursStudied     Float
+  understandingPct Int
+  difficulty       String
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TestResult {
+  id           String   @id @default(uuid())
+  userId       String
+  taskId       String
+  score        Float
+  timeTaken    Int
+  difficulty   String
+  totalQ       Int
+  correctQ     Int
+  attemptNum   Int      @default(1)
+  passed       Boolean
+  submissionId String?
+  createdAt    DateTime @default(now())
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task       Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  submission CodeSubmission? @relation(fields: [submissionId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model TestCase {
+  id             String  @id @default(uuid())
+  taskId         String
+  inputData      String
+  expectedOutput String
+  isHidden       Boolean @default(false)
+  difficulty     String  @default("beginner")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model LeaderboardHistory {
+  id         String   @id @default(uuid())
+  userId     String
+  batchId    String
+  rank       Int
+  score      Float
+  weekNumber Int
+  year       Int
+  recordedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, weekNumber])
+  @@index([userId])
+}
+
+model GlobalLeaderboard {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  targetTrack       String
+  trackRank         Int      @default(0)
+  trackRankTotal    Int      @default(0)
+  platformRank      Int      @default(0)
+  platformRankTotal Int      @default(0)
+  performanceScore  Float    @default(0)
+  weeklyMovement    Int      @default(0)
+  prevTrackRank     Int      @default(0)
+  prevPlatformRank  Int      @default(0)
+  updatedAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([targetTrack, performanceScore])
+  @@index([platformRank])
+  @@index([trackRank, targetTrack])
+}
+
+model RealityScore {
+  id               String   @id @default(uuid())
+  userId           String
+  score            Float
+  industryGap      Float
+  interviewScore   Float    @default(0)
+  codeQualityScore Float    @default(0)
+  speedScore       Float    @default(0)
+  consistencyScore Float    @default(0)
+  updatedAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Connection {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SenderConnections",   fields: [senderId],   references: [id], onDelete: Cascade)
+  receiver User @relation("ReceiverConnections", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+}
+
+model Group {
+  id              String    @id @default(uuid())
+  batchId         String
+  name            String
+  challengeStatus String    @default("none")
+  projectTitle    String?
+  deadline        DateTime?
+  score           Float     @default(0)
+  createdAt       DateTime  @default(now())
+
+  batch    Batch         @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  members  GroupMember[]
+  messages Message[]
+
+  @@index([batchId])
+}
+
+model GroupMember {
+  id                String @id @default(uuid())
+  groupId           String
+  userId            String @unique
+  role              String @default("member")
+  contributionScore Float  @default(0)
+  peerRating        Float  @default(0)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  senderId  String
+  batchId   String?
+  groupId   String?
+  channel   String   @default("general")
+  content   String
+  createdAt DateTime @default(now())
+
+  sender User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  batch  Batch? @relation(fields: [batchId],  references: [id], onDelete: Cascade)
+  group  Group? @relation(fields: [groupId],  references: [id], onDelete: Cascade)
+
+  @@index([batchId, channel])
+  @@index([groupId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model AIInteraction {
+  id          String   @id @default(uuid())
+  userId      String
+  query       String
+  response    String
+  contextType String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model HarshLog {
+  id          String   @id @default(uuid())
+  userId      String
+  triggerType String
+  message     String
+  severity    String   @default("medium")
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CodeSubmission {
+  id          String   @id @default(uuid())
+  userId      String
+  taskId      String
+  language    String
+  code        String
+  stdout      String?
+  stderr      String?
+  status      String
+  timeTaken   Float?
+  memoryUsed  Float?
+  passRate    Float    @default(0)
+  attemptNum  Int      @default(1)
+  submittedAt DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  testResults TestResult[]
+  codeReview  CodeReview?
+
+  @@index([userId, taskId])
+}
+
+model CodeReview {
+  id             String   @id @default(uuid())
+  submissionId   String   @unique
+  aiScore        Float
+  complexityNote String
+  qualityNote    String
+  suggestions    String
+  createdAt      DateTime @default(now())
+
+  submission CodeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
