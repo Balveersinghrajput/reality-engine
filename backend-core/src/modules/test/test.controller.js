@@ -6,16 +6,20 @@ async function generateTestController(req, res, next) {
   try {
     const test = await testService.generateTest(req.user.id, req.params.taskId);
     return successResponse(res, test, 'Test generated');
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
+    next(err);
+  }
 }
 
 async function submitTestController(req, res, next) {
   try {
-    const data = submitTestSchema.parse(req.body);
+    const data   = submitTestSchema.parse(req.body);
     const result = await testService.submitTest(req.user.id, data);
     return successResponse(res, result, 'Test submitted');
   } catch (err) {
     if (err.errors) return errorResponse(res, err.errors[0].message, 422);
+    if (err.status) return errorResponse(res, err.message, err.status);
     next(err);
   }
 }
@@ -31,7 +35,10 @@ async function getTestResultController(req, res, next) {
   try {
     const result = await testService.getTestResult(req.user.id, req.params.id);
     return successResponse(res, result, 'Test result fetched');
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.status) return errorResponse(res, err.message, err.status);
+    next(err);
+  }
 }
 
 module.exports = {

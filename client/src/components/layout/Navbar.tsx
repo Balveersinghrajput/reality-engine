@@ -2,7 +2,7 @@
 import { useDMStore } from '@/components/DMToastProvider'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
-import { Bell, Bot, Home, MessageCircle, Trophy, User, Zap } from 'lucide-react'
+import { Bell, Bot, ClipboardList, Home, MessageCircle, Trophy, User, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -43,12 +43,13 @@ function Badge({ count }: { count: number }) {
 export default function Navbar() {
   const pathname    = usePathname()
   const { user }    = useAuthStore()
-  const { totalUnread: dmUnread } = useDMStore()   // ✅ live DM badge
+  const { totalUnread: dmUnread } = useDMStore()
   const notifUnread = useNotifCount()
 
   const navItems = [
     { href: '/dashboard',     icon: Home,          label: 'Home',   badge: 0           },
     { href: '/tasks',         icon: Zap,           label: 'Tasks',  badge: 0           },
+    { href: '/test',          icon: ClipboardList, label: 'Test',   badge: 0           },
     { href: '/leaderboard',   icon: Trophy,        label: 'Ranks',  badge: 0           },
     { href: '/ai-chat',       icon: Bot,           label: 'AI',     badge: 0           },
     { href: '/messages',      icon: MessageCircle, label: 'DMs',    badge: dmUnread    },
@@ -110,7 +111,7 @@ export default function Navbar() {
       {navItems.map(({ href, icon: Icon, label, badge }) => {
         const active = !!pathname?.startsWith(href)
         return (
-          <Link key={href} href={href} style={{ textDecoration: 'none', flex: 1, maxWidth: `${100 / 7}%` }}>
+          <Link key={href} href={href} style={{ textDecoration: 'none', flex: 1, maxWidth: `${100 / navItems.length}%` }}>
             <div style={{
               position: 'relative', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', height: 44, cursor: 'pointer',

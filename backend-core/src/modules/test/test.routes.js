@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const {
   generateTestController,
   submitTestController,
@@ -10,9 +10,12 @@ const { authMiddleware } = require('../../middlewares/auth.middleware');
 
 router.use(authMiddleware);
 
-router.get('/generate/:taskId', generateTestController);
-router.post('/submit', submitTestController);
-router.get('/history', getTestHistoryController);
-router.get('/:id/result', getTestResultController);
+// ── named routes first (before /:id param) ────────────────────────
+router.get  ('/history',        getTestHistoryController);   // GET  /api/tests/history
+router.post ('/submit',         submitTestController);        // POST /api/tests/submit
+
+// ── param routes last ─────────────────────────────────────────────
+router.get  ('/generate/:taskId', generateTestController);   // GET  /api/tests/generate/:taskId
+router.get  ('/:id/result',       getTestResultController);  // GET  /api/tests/:id/result
 
 module.exports = router;
