@@ -1,3 +1,4 @@
+import DMToastProvider from '@/components/DMToastProvider'
 import Providers from '@/components/Providers'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
@@ -27,7 +28,9 @@ export default function RootLayout({
         }}
       >
         <Providers>
-          {children}
+          <DMToastProvider>
+            {children}
+          </DMToastProvider>
         </Providers>
         <Toaster
           position="top-right"

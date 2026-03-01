@@ -62,6 +62,27 @@ async function saveReflectionController(req, res, next) {
   }
 }
 
+async function createTaskController(req, res, next) {
+  try {
+    const task = await taskService.createTask(req.user.id, req.body);
+    return successResponse(res, task, 'Task created', 201);
+  } catch (err) { next(err); }
+}
+
+async function deleteTaskController(req, res, next) {
+  try {
+    await taskService.deleteTask(req.user.id, req.params.id);
+    return successResponse(res, null, 'Task deleted');
+  } catch (err) { next(err); }
+}
+
+async function activateTaskController(req, res, next) {
+  try {
+    const task = await taskService.activateTask(req.user.id, req.params.id);
+    return successResponse(res, task, 'Task activated');
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   getTasksController,
   getTaskController,
@@ -71,4 +92,7 @@ module.exports = {
   stopTimerController,
   completeTaskController,
   saveReflectionController,
+  createTaskController,
+  deleteTaskController,
+  activateTaskController,
 };

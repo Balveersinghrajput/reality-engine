@@ -2,26 +2,46 @@
 import { usePathname } from 'next/navigation'
 import Navbar from './Navbar'
 
-const AUTH_PAGES = ['/login', '/register']
+const AUTH_PATHS = ['/login', '/register']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isAuthPage = AUTH_PAGES.includes(pathname)
+  const isAuth = AUTH_PATHS.some(p => pathname.startsWith(p))
 
-  if (isAuthPage) return <>{children}</>
+  if (isAuth) return <>{children}</>
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#030303' }}>
+    <>
+      <style>{`
+        /* Desktop: content offset right of 64px sidebar */
+        @media (min-width: 768px) {
+          .re-main {
+            margin-left: 64px;
+            padding-bottom: 0;
+          }
+        }
+        /* Mobile: no left margin, pad bottom for bottom nav */
+        @media (max-width: 767px) {
+          .re-main {
+            margin-left: 0;
+            padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+          }
+        }
+      `}</style>
+
       <Navbar />
-      <main style={{
-        flex: 1,
-        minHeight: '100vh',
-        width: '100%',
-        marginLeft: '64px',
-        overflowX: 'hidden',
-      }}>
+
+      <main
+        className="re-main"
+        style={{
+          minHeight: '100vh',
+          width: '100%',
+          overflowX: 'hidden',
+          background: '#030303',
+        }}
+      >
         {children}
       </main>
-    </div>
+    </>
   )
 }
