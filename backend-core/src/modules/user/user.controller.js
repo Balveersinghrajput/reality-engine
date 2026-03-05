@@ -12,8 +12,8 @@ async function getProfile(req, res, next) {
 
 async function updateProfile(req, res, next) {
   try {
-    const { bio, githubUrl, linkedinUrl, portfolioUrl, skills } = req.body;
-    const data = await userService.updateProfile(req.user.id, { bio, githubUrl, linkedinUrl, portfolioUrl, skills });
+    const { bio, githubUrl, linkedinUrl, portfolioUrl, skills, mode } = req.body;
+    const data = await userService.updateProfile(req.user.id, { bio, githubUrl, linkedinUrl, portfolioUrl, skills, mode });
     return successResponse(res, data, 'Profile updated');
   } catch (err) { next(err); }
 }
@@ -90,6 +90,13 @@ async function likePost(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function bookmarkPost(req, res, next) {
+  try {
+    const result = await userService.bookmarkPost(req.user.id, req.params.id);
+    return successResponse(res, result, result.bookmarked ? 'Post bookmarked' : 'Post unbookmarked');
+  } catch (err) { next(err); }
+}
+
 async function addComment(req, res, next) {
   try {
     const { content } = req.body;
@@ -142,6 +149,7 @@ module.exports = {
   getMyPosts,
   deletePost,
   likePost,
+  bookmarkPost,
   addComment,
   getComments,
   createHighlight,
