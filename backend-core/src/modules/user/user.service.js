@@ -134,26 +134,27 @@ async function updateProfilePic(userId, file) {
 
 // ── Dashboard ──────────────────────────────────────────────────────
 async function getDashboard(userId) {
-  const user = await prisma.user.findUnique({
-    where:  { id: userId },
-    select: {
-      id: true, username: true, profilePic: true, tier: true,
-      targetTrack: true, level: true, mode: true, bio: true,
-      masteryPercent: true, realityScore: true,
-      streakCurrent: true, streakLongest: true, xp: true,
-      batchMember: { select: { batchId: true, rank: true, batch: { select: { batchCode: true } } } },
-      globalLeaderboard: true,
-      _count: { select: { tasks: { where: { status: 'completed' } } } },
-    },
-  });
-
-  const totalTasks  = await prisma.task.count({ where: { userId } });
-  const recentTests = await prisma.taskResult.findMany({
-    where:   { userId },
-    orderBy: { completedAt: 'desc' },
-    take:    20,
-    select:  { id: true, score: true, xpEarned: true, timeTakenSeconds: true, difficulty: true, completedAt: true, challengeTitle: true },
-  });
+  const [user, totalTasks, recentTests] = await Promise.all([
+    prisma.user.findUnique({
+      where:  { id: userId },
+      select: {
+        id: true, username: true, profilePic: true, tier: true,
+        targetTrack: true, level: true, mode: true, bio: true,
+        masteryPercent: true, realityScore: true,
+        streakCurrent: true, streakLongest: true, xp: true,
+        batchMember: { select: { batchId: true, rank: true, batch: { select: { batchCode: true } } } },
+        globalLeaderboard: true,
+        _count: { select: { tasks: { where: { status: 'completed' } } } },
+      },
+    }),
+    prisma.task.count({ where: { userId } }),
+    prisma.taskResult.findMany({
+      where:   { userId },
+      orderBy: { completedAt: 'desc' },
+      take:    20,
+      select:  { id: true, score: true, xpEarned: true, timeTakenSeconds: true, difficulty: true, completedAt: true, challengeTitle: true },
+    }),
+  ]);
 
   return {
     profile: {
