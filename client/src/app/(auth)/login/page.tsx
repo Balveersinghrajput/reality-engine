@@ -8,46 +8,168 @@ import toast from 'react-hot-toast'
 
 type Step = 'login' | 'forgot_email' | 'forgot_otp' | 'new_password'
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: '#0f0f0f',
-  border: '1px solid #1a1a1a',
-  borderRadius: '10px',
-  padding: '12px 16px',
-  color: '#fff',
-  fontSize: '14px',
-  outline: 'none',
-  boxSizing: 'border-box',
-  transition: 'border-color 0.2s',
-}
+const MONO = '"IBM Plex Mono", monospace'
+const SANS = '"Syne", sans-serif'
 
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  color: '#555',
-  fontSize: '12px',
-  marginBottom: '6px',
-  fontWeight: 600,
-  letterSpacing: '0.5px',
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
+body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased}
+
+.lp-root{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:20px;position:relative;overflow:hidden;background:#030307}
+
+/* Grid background */
+.lp-grid{position:fixed;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(0,200,255,.025) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(0,200,255,.025) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* Glow blobs */
+.lp-glow1{position:fixed;width:500px;height:500px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,200,255,.06) 0%,transparent 70%);
+  top:-150px;left:-150px;pointer-events:none}
+.lp-glow2{position:fixed;width:400px;height:400px;border-radius:50%;
+  background:radial-gradient(circle,rgba(139,92,246,.05) 0%,transparent 70%);
+  bottom:-100px;right:-100px;pointer-events:none}
+
+/* Scan line */
+.lp-scan{position:fixed;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,200,255,.15),transparent);
+  animation:scanline 8s linear infinite;pointer-events:none;z-index:0}
+
+.lp-wrap{position:relative;z-index:1;width:100%;max-width:420px;
+  animation:fadeUp .5s ease both}
+
+/* Logo */
+.lp-logo{text-align:center;margin-bottom:28px}
+.lp-logo-text{font-size:32px;font-weight:900;letter-spacing:-1px;color:#fff}
+.lp-logo-text span{color:#00c8ff}
+.lp-logo-sub{font-size:9px;font-family:${MONO};color:#1f2937;letter-spacing:4px;
+  text-transform:uppercase;margin-top:5px}
+
+/* Card */
+.lp-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);
+  border-radius:22px;padding:32px;backdrop-filter:blur(8px);
+  box-shadow:0 0 0 1px rgba(0,200,255,.03),0 32px 64px rgba(0,0,0,.6)}
+
+/* Corner accents */
+.lp-card::before,.lp-card::after{content:'';position:absolute;width:30px;height:30px;pointer-events:none}
+.lp-card{position:relative}
+.lp-card::before{top:-1px;left:-1px;border-top:1px solid rgba(0,200,255,.3);border-left:1px solid rgba(0,200,255,.3);border-radius:22px 0 0 0}
+.lp-card::after{bottom:-1px;right:-1px;border-bottom:1px solid rgba(139,92,246,.3);border-right:1px solid rgba(139,92,246,.3);border-radius:0 0 22px 0}
+
+/* Step title */
+.lp-title{font-size:20px;font-weight:800;color:#fff;margin-bottom:22px;letter-spacing:-.3px}
+.lp-subtitle{font-size:12px;color:#374151;margin-bottom:20px;line-height:1.6}
+
+/* Field */
+.lp-field{margin-bottom:15px}
+.lp-label{display:block;font-size:9px;font-family:${MONO};color:#374151;
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;font-weight:500}
+.lp-input{width:100%;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
+  border-radius:11px;padding:12px 14px;color:#f1f5f9;font-size:13px;outline:none;
+  font-family:'Syne',sans-serif;transition:border-color .2s,background .2s;
+  box-sizing:border-box}
+.lp-input:focus{border-color:rgba(0,200,255,.4);background:rgba(0,200,255,.03)}
+.lp-input::placeholder{color:#1f2937}
+.lp-input-wrap{position:relative}
+.lp-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:#374151;cursor:pointer;font-size:9px;
+  font-family:${MONO};letter-spacing:1px;padding:4px;transition:color .2s}
+.lp-eye:hover{color:#00c8ff}
+
+/* Submit btn */
+.lp-btn{width:100%;padding:13px;border-radius:11px;border:none;cursor:pointer;
+  font-size:13px;font-weight:700;font-family:'Syne',sans-serif;letter-spacing:.3px;
+  transition:all .2s;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#00c8ff18,#8b5cf618);
+  color:#fff;border:1px solid rgba(0,200,255,.25)}
+.lp-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,#00c8ff,#8b5cf6);
+  opacity:0;transition:opacity .2s}
+.lp-btn:hover::before{opacity:.15}
+.lp-btn:active{transform:scale(.99)}
+.lp-btn:disabled{opacity:.45;cursor:not-allowed}
+.lp-btn span{position:relative;z-index:1}
+
+/* Forgot link */
+.lp-forgot{background:none;border:none;color:#374151;font-size:11px;cursor:pointer;
+  padding:0;transition:color .2s;font-family:'Syne',sans-serif}
+.lp-forgot:hover{color:#00c8ff}
+
+/* Back btn */
+.lp-back{background:none;border:none;color:#374151;font-size:11px;cursor:pointer;
+  padding:0;margin-bottom:20px;display:flex;align-items:center;gap:5px;
+  font-family:${MONO};letter-spacing:1px;transition:color .2s}
+.lp-back:hover{color:#00c8ff}
+
+/* OTP boxes */
+.lp-otp-row{display:flex;gap:7px;margin-bottom:20px}
+.lp-otp-box{flex:1;aspect-ratio:1;text-align:center;font-size:20px;font-weight:700;
+  font-family:${MONO};background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
+  border-radius:10px;color:#fff;outline:none;caret-color:#00c8ff;
+  transition:border-color .15s,background .15s}
+.lp-otp-box:focus{border-color:rgba(0,200,255,.4);background:rgba(0,200,255,.04)}
+.lp-otp-box.filled{border-color:rgba(0,200,255,.3)}
+
+/* Email highlight */
+.lp-email-hl{color:#00c8ff;font-size:12px;font-weight:600;margin-bottom:22px;
+  font-family:${MONO};background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);
+  padding:6px 12px;border-radius:7px;display:inline-block}
+
+/* Divider */
+.lp-divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:#1f2937;font-size:10px;font-family:${MONO}}
+.lp-divider::before,.lp-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.05)}
+
+/* Bottom link */
+.lp-bottom{text-align:center;color:#374151;margin-top:20px;font-size:12px}
+.lp-bottom a{color:#00c8ff;text-decoration:none;font-weight:600;transition:color .2s}
+.lp-bottom a:hover{color:#38bdf8}
+
+/* Error text */
+.lp-err{color:#ef4444;font-size:11px;margin-top:5px;font-family:${MONO}}
+
+/* Resend */
+.lp-resend{text-align:center;font-size:12px;color:#374151}
+.lp-resend-btn{background:none;border:none;font-size:12px;cursor:pointer;
+  padding:0;font-family:'Syne',sans-serif;transition:color .2s}
+
+/* Loading spinner inline */
+.lp-spinner{display:inline-block;width:12px;height:12px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.2);border-top-color:#fff;
+  animation:spin .6s linear infinite;margin-right:7px;vertical-align:middle}
+
+/* Mismatch border */
+.input-error{border-color:rgba(239,68,68,.4) !important}
+.input-error:focus{border-color:rgba(239,68,68,.6) !important;background:rgba(239,68,68,.03) !important}
+
+@media(max-width:480px){
+  .lp-card{padding:24px 20px;border-radius:18px}
+  .lp-logo-text{font-size:28px}
 }
+`
 
 export default function LoginPage() {
   const router = useRouter()
   const { setToken, setUser } = useAuthStore()
 
-  const [step, setStep] = useState<Step>('login')
-  const [loading, setLoading] = useState(false)
+  const [step, setStep]           = useState<Step>('login')
+  const [loading, setLoading]     = useState(false)
   const [resendTimer, setResendTimer] = useState(0)
 
-  // Login form
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [showPass, setShowPass]   = useState(false)
 
-  // Forgot password flow
-  const [forgotEmail, setForgotEmail] = useState('')
-  const [otp, setOtp] = useState(['', '', '', '', '', ''])
-  const [newPassword, setNewPassword] = useState('')
+  const [forgotEmail, setForgotEmail]       = useState('')
+  const [otp, setOtp]                       = useState(['','','','','',''])
+  const [newPassword, setNewPassword]       = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [showNew, setShowNew] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [showNew, setShowNew]               = useState(false)
+  const [showConfirm, setShowConfirm]       = useState(false)
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -64,10 +186,8 @@ export default function LoginPage() {
     timerRef.current = setTimeout(tick, 1000)
   }
 
-  // ── Normal Login ──
   async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault(); setLoading(true)
     try {
       const res = await api.post('/auth/login', loginForm)
       const { accessToken, refreshToken, user } = res.data.data
@@ -78,29 +198,21 @@ export default function LoginPage() {
       router.push('/dashboard')
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Login failed')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
-  // ── Send OTP ──
   async function handleSendOtp(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault(); setLoading(true)
     try {
       await api.post('/auth/forgot-password', { email: forgotEmail })
-      setStep('forgot_otp')
-      startResendTimer()
+      setStep('forgot_otp'); startResendTimer()
       setTimeout(() => otpRefs.current[0]?.focus(), 100)
-      toast.success('OTP sent to your email!')
+      toast.success('OTP sent!')
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Email not found')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
-  // ── Verify OTP ──
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault()
     const code = otp.join('')
@@ -110,37 +222,24 @@ export default function LoginPage() {
       await api.post('/auth/verify-otp', { email: forgotEmail, otp: code })
       setStep('new_password')
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Invalid or expired OTP')
-      setOtp(['', '', '', '', '', ''])
-      otpRefs.current[0]?.focus()
-    } finally {
-      setLoading(false)
-    }
+      toast.error(err.response?.data?.message || 'Invalid OTP')
+      setOtp(['','','','','','']); otpRefs.current[0]?.focus()
+    } finally { setLoading(false) }
   }
 
-  // ── Reset Password ──
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault()
     if (newPassword !== confirmPassword) { toast.error('Passwords do not match'); return }
-    if (newPassword.length < 6) { toast.error('Password must be at least 6 characters'); return }
+    if (newPassword.length < 6) { toast.error('Min 6 characters'); return }
     setLoading(true)
     try {
-      // ✅ otp removed — already verified in previous step
-      await api.post('/auth/reset-password', {
-        email: forgotEmail,
-        newPassword,
-      })
+      await api.post('/auth/reset-password', { email: forgotEmail, newPassword })
       toast.success('Password updated! Please login.')
-      setStep('login')
-      setForgotEmail('')
-      setOtp(['', '', '', '', '', ''])
-      setNewPassword('')
-      setConfirmPassword('')
+      setStep('login'); setForgotEmail(''); setOtp(['','','','','',''])
+      setNewPassword(''); setConfirmPassword('')
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to reset password')
-    } finally {
-      setLoading(false)
-    }
+      toast.error(err.response?.data?.message || 'Reset failed')
+    } finally { setLoading(false) }
   }
 
   async function handleResend() {
@@ -148,15 +247,10 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await api.post('/auth/forgot-password', { email: forgotEmail })
-      setOtp(['', '', '', '', '', ''])
-      startResendTimer()
-      otpRefs.current[0]?.focus()
-      toast.success('New OTP sent!')
-    } catch {
-      toast.error('Failed to resend OTP')
-    } finally {
-      setLoading(false)
-    }
+      setOtp(['','','','','','']); startResendTimer()
+      otpRefs.current[0]?.focus(); toast.success('New OTP sent!')
+    } catch { toast.error('Failed to resend') }
+    finally { setLoading(false) }
   }
 
   function handleOtpChange(i: number, val: string) {
@@ -170,214 +264,191 @@ export default function LoginPage() {
   function handleOtpPaste(e: React.ClipboardEvent) {
     const paste = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
     if (paste.length) {
-      const next = [...paste.split(''), ...Array(6).fill('')].slice(0, 6)
-      setOtp(next)
+      setOtp([...paste.split(''), ...Array(6).fill('')].slice(0, 6))
       otpRefs.current[Math.min(paste.length, 5)]?.focus()
     }
     e.preventDefault()
   }
 
-  const Btn = ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
-    <button
-      type="submit"
-      disabled={disabled || loading}
-      style={{
-        width: '100%', background: '#3b82f6', color: '#fff', fontWeight: 700,
-        padding: '13px', borderRadius: '10px', fontSize: '14px', border: 'none',
-        cursor: (disabled || loading) ? 'not-allowed' : 'pointer',
-        opacity: (disabled || loading) ? 0.7 : 1, transition: 'all 0.2s',
-      }}
-      onMouseEnter={e => { if (!loading && !disabled) (e.currentTarget as HTMLElement).style.background = '#2563eb' }}
-      onMouseLeave={e => { if (!loading && !disabled) (e.currentTarget as HTMLElement).style.background = '#3b82f6' }}
-    >{children}</button>
-  )
-
-  const BackBtn = ({ to, label = '← Back' }: { to: Step; label?: string }) => (
-    <button
-      type="button"
-      onClick={() => setStep(to)}
-      style={{ background: 'none', border: 'none', color: '#555', fontSize: '12px', cursor: 'pointer', padding: 0, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '4px' }}
-    >{label}</button>
-  )
-
   const passwordMismatch = !!confirmPassword && confirmPassword !== newPassword
 
   return (
-    <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-      <div style={{ width: '100%', maxWidth: '420px' }}>
+    <>
+      <style>{CSS}</style>
+      <div className="lp-root">
+        <div className="lp-grid" />
+        <div className="lp-glow1" />
+        <div className="lp-glow2" />
+        <div className="lp-scan" />
 
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '36px', fontWeight: 900, color: '#fff', letterSpacing: '-1px' }}>
-            Reality<span style={{ color: '#3b82f6' }}>Engine</span>
-          </h1>
-          <p style={{ color: '#444', marginTop: '6px', fontSize: '13px', letterSpacing: '2px', textTransform: 'uppercase' }}>
-            Competitive Tech Learning
-          </p>
-        </div>
+        <div className="lp-wrap">
+          {/* Logo */}
+          <div className="lp-logo">
+            <div className="lp-logo-text">Reality<span>Engine</span></div>
+            <div className="lp-logo-sub">Competitive Tech Learning</div>
+          </div>
 
-        <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: '20px', padding: '36px' }}>
+          <div className="lp-card">
 
-          {/* ── LOGIN ── */}
-          {step === 'login' && (
-            <>
-              <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', marginBottom: '24px' }}>Welcome back</h2>
-              <form onSubmit={handleLogin}>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={labelStyle}>EMAIL</label>
-                  <input
-                    type="email" required value={loginForm.email}
-                    onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
-                    placeholder="you@example.com" style={inputStyle}
-                    onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={e => e.target.style.borderColor = '#1a1a1a'}
-                  />
-                </div>
-                <div style={{ marginBottom: '8px' }}>
-                  <label style={labelStyle}>PASSWORD</label>
-                  <input
-                    type="password" required value={loginForm.password}
-                    onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-                    placeholder="••••••••" style={inputStyle}
-                    onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={e => e.target.style.borderColor = '#1a1a1a'}
-                  />
-                </div>
+            {/* ── LOGIN ── */}
+            {step === 'login' && (
+              <>
+                <div className="lp-title">Welcome back</div>
+                <form onSubmit={handleLogin}>
+                  <div className="lp-field">
+                    <label className="lp-label">Email</label>
+                    <input
+                      className="lp-input" type="email" required
+                      placeholder="you@example.com" value={loginForm.email}
+                      onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
+                    />
+                  </div>
 
-                <div style={{ textAlign: 'right', marginBottom: '24px' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setStep('forgot_email'); setForgotEmail(loginForm.email) }}
-                    style={{ background: 'none', border: 'none', color: '#3b82f6', fontSize: '12px', cursor: 'pointer', padding: 0 }}
-                  >
-                    Forgot password?
+                  <div className="lp-field">
+                    <label className="lp-label">Password</label>
+                    <div className="lp-input-wrap">
+                      <input
+                        className="lp-input" type={showPass ? 'text' : 'password'} required
+                        placeholder="••••••••" value={loginForm.password}
+                        style={{ paddingRight: 52 }}
+                        onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                      />
+                      <button type="button" className="lp-eye" onClick={() => setShowPass(v => !v)}>
+                        {showPass ? 'HIDE' : 'SHOW'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right', marginBottom: 20 }}>
+                    <button type="button" className="lp-forgot"
+                      onClick={() => { setStep('forgot_email'); setForgotEmail(loginForm.email) }}>
+                      Forgot password?
+                    </button>
+                  </div>
+
+                  <button type="submit" className="lp-btn" disabled={loading}>
+                    <span>{loading ? <><span className="lp-spinner"/>Logging in...</> : 'Login →'}</span>
                   </button>
-                </div>
+                </form>
+              </>
+            )}
 
-                <Btn>{loading ? 'Logging in...' : 'Login'}</Btn>
-              </form>
-            </>
-          )}
-
-          {/* ── FORGOT — Enter Email ── */}
-          {step === 'forgot_email' && (
-            <>
-              <BackBtn to="login" label="← Back to login" />
-              <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>Reset password</h2>
-              <p style={{ color: '#444', fontSize: '13px', marginBottom: '24px' }}>
-                Enter your registered email to receive a verification code.
-              </p>
-              <form onSubmit={handleSendOtp}>
-                <div style={{ marginBottom: '24px' }}>
-                  <label style={labelStyle}>EMAIL</label>
-                  <input
-                    type="email" required value={forgotEmail}
-                    onChange={e => setForgotEmail(e.target.value)}
-                    placeholder="you@example.com" style={inputStyle}
-                    onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={e => e.target.style.borderColor = '#1a1a1a'}
-                  />
-                </div>
-                <Btn>{loading ? 'Sending OTP...' : 'Send OTP →'}</Btn>
-              </form>
-            </>
-          )}
-
-          {/* ── FORGOT — Verify OTP ── */}
-          {step === 'forgot_otp' && (
-            <>
-              <BackBtn to="forgot_email" />
-              <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>Check your inbox</h2>
-              <p style={{ color: '#444', fontSize: '13px', marginBottom: '4px' }}>6-digit code sent to</p>
-              <p style={{ color: '#3b82f6', fontSize: '13px', fontWeight: 600, marginBottom: '28px' }}>{forgotEmail}</p>
-
-              <form onSubmit={handleVerifyOtp}>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                  {otp.map((digit, i) => (
-                    <input key={i} ref={el => { otpRefs.current[i] = el }}
-                      type="text" inputMode="numeric" maxLength={1}
-                      value={digit} placeholder="·"
-                      onChange={e => handleOtpChange(i, e.target.value)}
-                      onKeyDown={e => handleOtpKeyDown(i, e)}
-                      onPaste={handleOtpPaste}
-                      style={{ width: '100%', aspectRatio: '1', textAlign: 'center', fontSize: '22px', fontWeight: 600, background: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: '10px', color: '#fff', outline: 'none', caretColor: '#3b82f6', transition: 'border-color 0.15s' }}
-                      onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                      onBlur={e => e.target.style.borderColor = digit ? '#2563eb' : '#1a1a1a'}
-                    />
-                  ))}
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <Btn>{loading ? 'Verifying...' : 'Verify OTP →'}</Btn>
-                </div>
-              </form>
-
-              <p style={{ textAlign: 'center', fontSize: '13px', color: '#444' }}>
-                Didn't get it?{' '}
-                <button onClick={handleResend} disabled={resendTimer > 0 || loading} type="button"
-                  style={{ background: 'none', border: 'none', color: resendTimer > 0 ? '#333' : '#3b82f6', fontSize: '13px', cursor: resendTimer > 0 ? 'default' : 'pointer', padding: 0 }}>
-                  {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
+            {/* ── FORGOT EMAIL ── */}
+            {step === 'forgot_email' && (
+              <>
+                <button type="button" className="lp-back" onClick={() => setStep('login')}>
+                  ← Back to login
                 </button>
-              </p>
-            </>
-          )}
-
-          {/* ── FORGOT — Set New Password ── */}
-          {step === 'new_password' && (
-            <>
-              <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>Set new password</h2>
-              <p style={{ color: '#444', fontSize: '13px', marginBottom: '24px' }}>Choose a strong password for your account.</p>
-
-              <form onSubmit={handleResetPassword}>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={labelStyle}>NEW PASSWORD</label>
-                  <div style={{ position: 'relative' }}>
+                <div className="lp-title">Reset password</div>
+                <p className="lp-subtitle">Enter your registered email to receive a 6-digit verification code.</p>
+                <form onSubmit={handleSendOtp}>
+                  <div className="lp-field">
+                    <label className="lp-label">Email</label>
                     <input
-                      type={showNew ? 'text' : 'password'} required value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      style={{ ...inputStyle, paddingRight: '44px' }}
-                      onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                      onBlur={e => e.target.style.borderColor = '#1a1a1a'}
+                      className="lp-input" type="email" required
+                      placeholder="you@example.com" value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
                     />
-                    <button type="button" onClick={() => setShowNew(v => !v)}
-                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '12px' }}>
-                      {showNew ? 'HIDE' : 'SHOW'}
-                    </button>
                   </div>
-                </div>
+                  <button type="submit" className="lp-btn" disabled={loading}>
+                    <span>{loading ? <><span className="lp-spinner"/>Sending...</> : 'Send OTP →'}</span>
+                  </button>
+                </form>
+              </>
+            )}
 
-                <div style={{ marginBottom: '24px' }}>
-                  <label style={labelStyle}>CONFIRM PASSWORD</label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type={showConfirm ? 'text' : 'password'} required value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      style={{ ...inputStyle, paddingRight: '44px', borderColor: passwordMismatch ? '#ef4444' : '#1a1a1a' }}
-                      onFocus={e => e.target.style.borderColor = passwordMismatch ? '#ef4444' : '#3b82f6'}
-                      onBlur={e => e.target.style.borderColor = passwordMismatch ? '#ef4444' : '#1a1a1a'}
-                    />
-                    <button type="button" onClick={() => setShowConfirm(v => !v)}
-                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '12px' }}>
-                      {showConfirm ? 'HIDE' : 'SHOW'}
-                    </button>
+            {/* ── OTP ── */}
+            {step === 'forgot_otp' && (
+              <>
+                <button type="button" className="lp-back" onClick={() => setStep('forgot_email')}>
+                  ← Back
+                </button>
+                <div className="lp-title">Check your inbox</div>
+                <p className="lp-subtitle" style={{ marginBottom: 8 }}>6-digit code sent to</p>
+                <div className="lp-email-hl">{forgotEmail}</div>
+
+                <form onSubmit={handleVerifyOtp}>
+                  <div className="lp-otp-row" onPaste={handleOtpPaste}>
+                    {otp.map((digit, i) => (
+                      <input
+                        key={i}
+                        ref={el => { otpRefs.current[i] = el }}
+                        className={`lp-otp-box ${digit ? 'filled' : ''}`}
+                        type="text" inputMode="numeric" maxLength={1}
+                        value={digit} placeholder="·"
+                        onChange={e => handleOtpChange(i, e.target.value)}
+                        onKeyDown={e => handleOtpKeyDown(i, e)}
+                      />
+                    ))}
                   </div>
-                  {passwordMismatch && (
-                    <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px' }}>Passwords do not match</p>
-                  )}
-                </div>
+                  <button type="submit" className="lp-btn" disabled={loading} style={{ marginBottom: 14 }}>
+                    <span>{loading ? <><span className="lp-spinner"/>Verifying...</> : 'Verify OTP →'}</span>
+                  </button>
+                </form>
 
-                <Btn disabled={passwordMismatch}>{loading ? 'Updating...' : 'Update Password'}</Btn>
-              </form>
-            </>
-          )}
+                <p className="lp-resend">
+                  Didn't get it?{' '}
+                  <button onClick={handleResend} disabled={resendTimer > 0 || loading}
+                    className="lp-resend-btn"
+                    style={{ color: resendTimer > 0 ? '#374151' : '#00c8ff', cursor: resendTimer > 0 ? 'default' : 'pointer' }}>
+                    {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
+                  </button>
+                </p>
+              </>
+            )}
 
-          <p style={{ textAlign: 'center', color: '#444', marginTop: '24px', fontSize: '13px' }}>
-            Don't have an account?{' '}
-            <Link href="/register" style={{ color: '#3b82f6' }}>Register</Link>
-          </p>
+            {/* ── NEW PASSWORD ── */}
+            {step === 'new_password' && (
+              <>
+                <div className="lp-title">Set new password</div>
+                <p className="lp-subtitle">Choose a strong password for your account.</p>
+                <form onSubmit={handleResetPassword}>
+                  <div className="lp-field">
+                    <label className="lp-label">New Password</label>
+                    <div className="lp-input-wrap">
+                      <input
+                        className="lp-input" type={showNew ? 'text' : 'password'} required
+                        placeholder="••••••••" value={newPassword} style={{ paddingRight: 52 }}
+                        onChange={e => setNewPassword(e.target.value)}
+                      />
+                      <button type="button" className="lp-eye" onClick={() => setShowNew(v => !v)}>
+                        {showNew ? 'HIDE' : 'SHOW'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="lp-field">
+                    <label className="lp-label">Confirm Password</label>
+                    <div className="lp-input-wrap">
+                      <input
+                        className={`lp-input ${passwordMismatch ? 'input-error' : ''}`}
+                        type={showConfirm ? 'text' : 'password'} required
+                        placeholder="••••••••" value={confirmPassword} style={{ paddingRight: 52 }}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                      />
+                      <button type="button" className="lp-eye" onClick={() => setShowConfirm(v => !v)}>
+                        {showConfirm ? 'HIDE' : 'SHOW'}
+                      </button>
+                    </div>
+                    {passwordMismatch && <p className="lp-err">Passwords do not match</p>}
+                  </div>
+
+                  <button type="submit" className="lp-btn" disabled={loading || passwordMismatch}>
+                    <span>{loading ? <><span className="lp-spinner"/>Updating...</> : 'Update Password'}</span>
+                  </button>
+                </form>
+              </>
+            )}
+
+            <div className="lp-divider">OR</div>
+
+            <p className="lp-bottom">
+              Don't have an account?{' '}
+              <Link href="/register">Create account</Link>
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

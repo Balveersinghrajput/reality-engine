@@ -1,580 +1,1266 @@
 'use client'
+
 import { useDMStore } from '@/components/DMToastProvider'
 import api from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import {
-  ArrowLeft, Check, ChevronDown, Code2, Copy,
-  File, Forward, Info, Paperclip, Pin, Send, Trash2, X
+  ArrowLeft,
+  Camera,
+  Check, CheckCheck,
+  CheckSquare,
+  ChevronDown,
+  Clipboard,
+  Code2,
+  Copy,
+  Image as ImageIcon,
+  MoreVertical,
+  Paperclip,
+  Phone,
+  Pin, PinOff,
+  Reply,
+  Search,
+  Send,
+  Share2,
+  Smile,
+  Square,
+  Trash2,
+  X,
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { io, Socket } from 'socket.io-client'
 
-const LANG_COLORS: Record<string, string> = {
-  javascript: '#f7df1e', typescript: '#3178c6', python: '#3572a5',
-  java: '#b07219', cpp: '#f34b7d', c: '#555555', go: '#00add8',
-  rust: '#dea584', kotlin: '#a97bff', swift: '#f05138',
-  html: '#e34c26', css: '#563d7c', sql: '#e38c00',
-  bash: '#89e051', json: '#5a9', plaintext: '#888',
+// ─────────────────────────────────────────────
+//  Types
+// ─────────────────────────────────────────────
+interface Message {
+  id        : string
+  senderId  : string
+  content   : string
+  createdAt : string
+  seen     ?: boolean
+  reactions?: Record<string, string[]>
+  replyTo  ?: { id: string; content: string; senderName: string }
+  fileUrl  ?: string
+  fileType ?: 'image' | 'file' | 'code'
+  fileName ?: string
+  language ?: string   // for code snippets
+  pinned   ?: boolean
 }
-const LANGUAGES = Object.keys(LANG_COLORS)
 
-function fmtTime(d: string) {
-  return new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+interface OtherUser { id: string; username: string; tier?: string }
+
+// ─────────────────────────────────────────────
+//  Constants
+// ─────────────────────────────────────────────
+const QUICK_EMOJIS = ['👍','❤️','😂','😮','😢','🔥','🎉','💯','👀','✅']
+const FULL_EMOJIS  = [
+  '😀','😂','🥲','😍','🤩','😎','🥳','😅','🤣','😭',
+  '❤️','🧡','💛','💚','💙','💜','🖤','🤍','💯','🔥',
+  '👍','👎','👏','🙌','🤝','✌️','🤟','🫶','💪','🎉',
+  '🎊','🎁','🎈','🌟','⭐','💫','✨','🚀','🌈','🍕',
+]
+const AVATAR_GRADIENTS: [string, string][] = [
+  ['#3b82f6','#6366f1'],
+  ['#8b5cf6','#ec4899'],
+  ['#06b6d4','#3b82f6'],
+  ['#10b981','#06b6d4'],
+  ['#f59e0b','#ef4444'],
+]
+const CODE_LANGS = ['javascript','typescript','python','java','c++','go','rust','html','css','sql','bash','json']
+
+// ─────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────
+function getAvatarColors(username?: string | null): [string, string] {
+  if (!username) return ['#3b82f6', '#6366f1']
+  return AVATAR_GRADIENTS[username.charCodeAt(0) % AVATAR_GRADIENTS.length]
 }
-function fmtSize(b?: number) {
-  if (!b) return ''
-  if (b < 1024) return `${b} B`
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
-  return `${(b / 1048576).toFixed(1)} MB`
+
+const fmtTime = (d: string) =>
+  new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+const fmtDate = (d: string) => {
+  const dt   = new Date(d); const now = new Date()
+  const yest = new Date(now); yest.setDate(now.getDate() - 1)
+  if (dt.toDateString() === now.toDateString())  return 'Today'
+  if (dt.toDateString() === yest.toDateString()) return 'Yesterday'
+  return dt.toLocaleDateString([], { month:'short', day:'numeric', year:'numeric' })
 }
 
-// ─── Code Block ───────────────────────────────────────────────────
-function CodeBlock({ code, language }: { code: string; language: string }) {
-  const [copied,   setCopied]   = useState(false)
-  const [expanded, setExpanded] = useState(false)
-  const lines   = code.split('\n')
-  const lc      = LANG_COLORS[language] || '#888'
-  const preview = lines.slice(0, 6)
-  const hasMore = lines.length > 6
+const newDay = (msgs: Message[], i: number) =>
+  i === 0 || new Date(msgs[i-1].createdAt).toDateString() !== new Date(msgs[i].createdAt).toDateString()
 
+const lastInGroup = (msgs: Message[], i: number) =>
+  i === msgs.length - 1 || msgs[i].senderId !== msgs[i+1].senderId
+
+// ─────────────────────────────────────────────
+//  Sub-components
+// ─────────────────────────────────────────────
+
+/** Typing indicator */
+function TypingIndicator({ name }: { name: string }) {
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', width: '100%', maxWidth: 480, background: '#07090f', border: `1px solid ${lc}30`, fontFamily: "'JetBrains Mono', monospace" }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: `linear-gradient(90deg, ${lc}12, transparent)`, borderBottom: `1px solid ${lc}20` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 5 }}>
-            {['#ff5f57', '#febc2e', '#28c840'].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c, opacity: 0.85 }} />)}
-          </div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: lc, letterSpacing: 1.5, textTransform: 'uppercase' }}>{language}</span>
-          <span style={{ fontSize: 10, color: '#333' }}>{lines.length} lines</span>
+    <div style={S.typingRow}>
+      <div style={S.typingBubble}>
+        <span style={{ fontSize:12, color:'#555' }}>{name} is typing</span>
+        <div style={{ display:'flex', gap:3 }}>
+          {[0,1,2].map(i => (
+            <span key={i} style={{ ...S.dot, animationDelay:`${i*0.18}s` }} />
+          ))}
         </div>
-        <button onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, background: copied ? `${lc}20` : 'rgba(255,255,255,.04)', border: `1px solid ${copied ? lc + '50' : 'rgba(255,255,255,.06)'}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', color: copied ? lc : '#444', fontSize: 10, fontWeight: 700, transition: 'all .2s' }}>
-          {copied ? <Check size={10} /> : <Copy size={10} />}{copied ? 'Copied!' : 'Copy'}
-        </button>
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5, lineHeight: '22px' }}>
-          <tbody>
-            {(expanded ? lines : preview).map((line, i) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.012)' }}>
-                <td style={{ padding: '0 10px 0 14px', textAlign: 'right', color: '#252535', userSelect: 'none', minWidth: 36, borderRight: `1px solid ${lc}10`, fontSize: 10, verticalAlign: 'top' }}>{i + 1}</td>
-                <td style={{ padding: '0 16px 0 14px', color: '#c9d1d9', whiteSpace: 'pre', verticalAlign: 'top' }}>{line || <span style={{ opacity: 0 }}>_</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {hasMore && (
-        <button onClick={() => setExpanded(e => !e)} style={{ width: '100%', padding: '7px', background: `${lc}08`, border: 'none', borderTop: `1px solid ${lc}15`, color: lc, fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase' }}>
-          {expanded ? '▲ Show less' : `▼ ${lines.length - 6} more lines`}
-        </button>
-      )}
     </div>
   )
 }
 
-// ─── Context Menu ─────────────────────────────────────────────────
-function ContextMenu({ x, y, isMine, onClose, onDelete, onCopy, onForward, onPin, onInfo }: any) {
+/** Reaction bar */
+function ReactionBar({ msgId, myId, reactions={}, onReact }: {
+  msgId:string; myId:string; reactions:Record<string,string[]>
+  onReact:(id:string,emoji:string)=>void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const h = () => onClose()
-    window.addEventListener('click', h)
-    return () => window.removeEventListener('click', h)
-  }, [])
-  const items = [
-    { icon: <Copy size={13} />,    label: 'Copy',    action: onCopy },
-    { icon: <Forward size={13} />, label: 'Forward', action: onForward },
-    { icon: <Pin size={13} />,     label: 'Pin',     action: onPin },
-    { icon: <Info size={13} />,    label: 'Info',    action: onInfo },
-    ...(isMine ? [{ icon: <Trash2 size={13} />, label: 'Delete', action: onDelete, danger: true }] : []),
-  ]
+    if (!open) return
+    const h = (e:MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
   return (
-    <div style={{ position: 'fixed', left: x, top: y, zIndex: 1000, background: '#111318', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, padding: '5px', minWidth: 160, boxShadow: '0 8px 32px rgba(0,0,0,.7)', animation: 'ctxIn .12s ease' }} onClick={e => e.stopPropagation()}>
-      {items.map((item: any, i: number) => (
-        <button key={i} onClick={() => { item.action(); onClose() }}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', background: 'none', border: 'none', borderRadius: 8, cursor: 'pointer', color: item.danger ? '#f87171' : '#ccc', fontSize: 13, fontWeight: 500 }}
-          onMouseEnter={e => (e.currentTarget.style.background = item.danger ? 'rgba(239,68,68,.12)' : 'rgba(255,255,255,.06)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-          <span style={{ color: item.danger ? '#f87171' : '#555' }}>{item.icon}</span>{item.label}
+    <div ref={ref} style={S.reactionBar}>
+      <button style={S.addReactBtn} onClick={() => setOpen(v=>!v)}><Smile size={11}/></button>
+      {open && (
+        <div style={S.quickPicker}>
+          {QUICK_EMOJIS.map(e => (
+            <button key={e} style={S.qpItem} onClick={() => { onReact(msgId,e); setOpen(false) }}>{e}</button>
+          ))}
+        </div>
+      )}
+      {Object.entries(reactions).map(([emoji,users]) => (
+        <button key={emoji}
+          style={{ ...S.chip, ...(users.includes(myId) ? S.chipMine : {}) }}
+          onClick={() => onReact(msgId,emoji)}>
+          {emoji}<span style={{ fontSize:10, marginLeft:2, opacity:0.7 }}>{users.length}</span>
         </button>
       ))}
     </div>
   )
 }
 
-// ─── Delete Dialog ────────────────────────────────────────────────
-function DeleteDialog({ isMine, onClose, onDeleteForMe, onDeleteForEveryone }: any) {
+/** Code block inside a bubble */
+function CodeBlock({ code, lang, mine }: { code:string; lang?:string; mine:boolean }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn .15s ease' }} onClick={onClose}>
-      <div style={{ background: '#111318', border: '1px solid rgba(255,255,255,.1)', borderRadius: 18, padding: '24px', minWidth: 290, boxShadow: '0 20px 60px rgba(0,0,0,.8)' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(239,68,68,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Trash2 size={18} color="#f87171" />
-          </div>
-          <div>
-            <p style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>Delete Message</p>
-            <p style={{ color: '#444', fontSize: 12 }}>Choose who to delete for</p>
-          </div>
+    <div style={{ ...S.codeBlock, borderColor: mine ? '#1e3a6e':'#1a1a1a' }}>
+      <div style={S.codeHeader}>
+        <span style={{ fontSize:11, color:'#555', fontFamily:'monospace' }}>{lang ?? 'code'}</span>
+        <button style={S.copyBtn} onClick={copy} title="Copy code">
+          {copied ? <Check size={12} style={{ color:'#22c55e' }}/> : <Clipboard size={12}/>}
+        </button>
+      </div>
+      <pre style={S.codePre}><code style={{ fontFamily:"'Fira Code',monospace", fontSize:12, color:'#c8d8f8' }}>{code}</code></pre>
+    </div>
+  )
+}
+
+/** In-bubble reply quote */
+function InBubbleReply({ r }: { r: NonNullable<Message['replyTo']> }) {
+  return (
+    <div style={S.inReply}>
+      <div style={S.inReplyBar}/>
+      <div style={{ minWidth:0 }}>
+        <p style={{ fontSize:11, color:'#3b82f6', fontWeight:600, marginBottom:1 }}>{r.senderName}</p>
+        <p style={{ fontSize:12, color:'#555', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:200 }}>{r.content}</p>
+      </div>
+    </div>
+  )
+}
+
+/** Reply strip above input */
+function ReplyStrip({ reply, onCancel }: { reply?:Message['replyTo']; onCancel:()=>void }) {
+  if (!reply) return null
+  return (
+    <div style={S.replyStrip}>
+      <div style={{ width:3, height:28, borderRadius:2, background:'#1d4ed8', flexShrink:0 }}/>
+      <div style={{ flex:1, minWidth:0 }}>
+        <p style={{ fontSize:12, color:'#3b82f6', fontWeight:600 }}>{reply.senderName}</p>
+        <p style={{ fontSize:12, color:'#444', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{reply.content}</p>
+      </div>
+      <button style={S.closeBtn} onClick={onCancel}><X size={13}/></button>
+    </div>
+  )
+}
+
+/** Code share modal */
+function CodeModal({ onSend, onClose }: {
+  onSend:(code:string,lang:string)=>void; onClose:()=>void
+}) {
+  const [code, setCode] = useState('')
+  const [lang, setLang] = useState('javascript')
+  return (
+    <div style={S.modalBackdrop} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={S.modal}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <span style={{ fontWeight:600, fontSize:15, color:'#e4e4e7' }}>Share Code</span>
+          <button style={S.closeBtn} onClick={onClose}><X size={15}/></button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={onDeleteForMe}
-            style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,.08)', background: 'rgba(255,255,255,.04)', color: '#ccc', fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.08)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,.04)')}>
-            🙈 Delete for me
-            <span style={{ display: 'block', fontSize: 11, color: '#444', fontWeight: 400, marginTop: 2 }}>Only you won't see this</span>
-          </button>
-          {isMine && (
-            <button onClick={onDeleteForEveryone}
-              style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid rgba(239,68,68,.25)', background: 'rgba(239,68,68,.08)', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,.15)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(239,68,68,.08)')}>
-              🗑 Delete for everyone
-              <span style={{ display: 'block', fontSize: 11, color: '#f8717180', fontWeight: 400, marginTop: 2 }}>Removed for all participants</span>
+
+        {/* Language selector */}
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:12 }}>
+          {CODE_LANGS.map(l => (
+            <button key={l}
+              style={{ padding:'3px 10px', borderRadius:20, fontSize:11,
+                background: lang===l ? '#1d4ed8':'#111',
+                border: `1px solid ${lang===l ? '#2563eb':'#1c1c1c'}`,
+                color: lang===l ? '#fff':'#555', cursor:'pointer', transition:'all 0.15s' }}
+              onClick={() => setLang(l)}>
+              {l}
             </button>
-          )}
-          <button onClick={onClose} style={{ padding: '10px', borderRadius: 10, border: 'none', background: 'transparent', color: '#444', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          ))}
+        </div>
+
+        <textarea
+          autoFocus
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          placeholder="Paste your code here…"
+          style={{ ...S.codeTA }}
+        />
+
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:12 }}>
+          <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
+          <button
+            style={{ ...S.primaryBtn, ...(!code.trim() ? { opacity:0.4, cursor:'not-allowed' }:{}) }}
+            disabled={!code.trim()}
+            onClick={() => { onSend(code,lang); onClose() }}>
+            Send Code
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Bubble ───────────────────────────────────────────────────────
-function Bubble({ msg, isMine, onContextMenu }: { msg: any; isMine: boolean; onContextMenu: any }) {
-  const del       = msg.isDeleted
-  const isPending = msg._pending === true
+/** Delete confirmation modal */
+function DeleteModal({ count, onDeleteForMe, onDeleteForAll, onClose }: {
+  count:number; onDeleteForMe:()=>void; onDeleteForAll:()=>void; onClose:()=>void
+}) {
+  return (
+    <div style={S.modalBackdrop} onClick={e => { if (e.target===e.currentTarget) onClose() }}>
+      <div style={{ ...S.modal, maxWidth:340 }}>
+        <p style={{ fontSize:15, fontWeight:600, color:'#e4e4e7', marginBottom:8 }}>
+          Delete {count} message{count>1?'s':''}?
+        </p>
+        <p style={{ fontSize:13, color:'#555', marginBottom:20 }}>
+          This action cannot be undone.
+        </p>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <button style={S.deleteForAllBtn} onClick={() => { onDeleteForAll(); onClose() }}>
+            🗑️ Delete for Everyone
+          </button>
+          <button style={S.deleteForMeBtn} onClick={() => { onDeleteForMe(); onClose() }}>
+            Delete for Me
+          </button>
+          <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Pinned banner */
+function PinnedBanner({ pinned, onJump }: { pinned:Message[]; onJump:(id:string)=>void }) {
+  const [i, setI] = useState(0)
+  if (!pinned.length) return null
+  const msg = pinned[i % pinned.length]
+  return (
+    <div style={S.pinnedBanner} onClick={() => { onJump(msg.id); setI(v=>(v+1)%pinned.length) }}>
+      <Pin size={11} style={{ color:'#facc15', flexShrink:0 }}/>
+      <p style={{ flex:1, minWidth:0, fontSize:12, color:'#555', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{msg.content}</p>
+      {pinned.length>1 && <span style={{ fontSize:11, color:'#444' }}>{(i%pinned.length)+1}/{pinned.length}</span>}
+    </div>
+  )
+}
+
+/** Search overlay */
+function SearchOverlay({ messages, onClose, onJump }: {
+  messages:Message[]; onClose:()=>void; onJump:(id:string)=>void
+}) {
+  const [q, setQ] = useState('')
+  const hits = q.trim() ? messages.filter(m => m.content?.toLowerCase().includes(q.toLowerCase())) : []
+  return (
+    <div style={S.searchOverlay}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderBottom:'1px solid #111' }}>
+        <Search size={14} style={{ color:'#555', flexShrink:0 }}/>
+        <input autoFocus value={q} onChange={e=>setQ(e.target.value)}
+          placeholder="Search messages…"
+          style={{ flex:1, background:'transparent', border:'none', outline:'none', color:'#d4d4d8', fontSize:14 }}/>
+        <button style={S.closeBtn} onClick={onClose}><X size={14}/></button>
+      </div>
+      <div style={{ overflowY:'auto', flex:1 }}>
+        {q && !hits.length && <p style={{ color:'#444', fontSize:13, textAlign:'center', padding:24 }}>No results</p>}
+        {hits.map(m => (
+          <button key={m.id} style={S.searchHit} onClick={() => { onJump(m.id); onClose() }}>
+            <p style={{ fontSize:13, color:'#bbb', textAlign:'left' }}>{m.content}</p>
+            <p style={{ fontSize:11, color:'#444', marginTop:2 }}>{fmtTime(m.createdAt)}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Full emoji panel */
+function EmojiPanel({ onSelect }: { onSelect:(e:string)=>void }) {
+  return (
+    <div style={{ display:'flex', flexWrap:'wrap', padding:'10px 12px', borderTop:'1px solid #0c0c0c', gap:2 }}>
+      {FULL_EMOJIS.map(e => (
+        <button key={e} style={S.emojiBtn} onClick={() => onSelect(e)}>{e}</button>
+      ))}
+    </div>
+  )
+}
+
+/** 3-dot menu */
+function MoreMenu({ onClose, username, onClear }: {
+  onClose:()=>void; username:string; onClear:()=>void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const h = (e:MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [onClose])
 
   return (
-    <div
-      onContextMenu={e => { e.preventDefault(); onContextMenu(e, msg, isMine) }}
-      style={{ display: 'flex', flexDirection: isMine ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 8, padding: '3px 14px', marginBottom: 2, opacity: isPending ? 0.6 : 1, transition: 'opacity .2s' }}
-    >
-      {/* Avatar */}
-      <div style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0, background: isMine ? 'linear-gradient(135deg,#1d4ed8,#7c3aed)' : 'linear-gradient(135deg,#374151,#1f2937)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, color: '#fff', marginBottom: 18 }}>
-        {msg.sender?.username?.[0]?.toUpperCase() ?? '?'}
-      </div>
-
-      <div style={{ maxWidth: '68%', minWidth: 60 }}>
-        {!isMine && (
-          <p style={{ color: '#6b7280', fontSize: 10, fontWeight: 700, marginBottom: 3, paddingLeft: 2 }}>{msg.sender?.username}</p>
-        )}
-        <div style={{
-          borderRadius: isMine ? '18px 4px 18px 18px' : '4px 18px 18px 18px',
-          padding: del ? '10px 14px' : msg.type === 'code' ? 0 : msg.type === 'image' ? 3 : '10px 14px',
-          background: del ? 'rgba(255,255,255,.03)' : isMine ? 'linear-gradient(135deg, #1e40af 0%, #2563eb 100%)' : '#1e2130',
-          border: del ? '1px solid rgba(255,255,255,.05)' : isMine ? '1px solid rgba(59,130,246,.35)' : '1px solid rgba(255,255,255,.08)',
-          boxShadow: isMine ? '0 2px 12px rgba(37,99,235,.25)' : '0 2px 8px rgba(0,0,0,.3)',
-          overflow: 'hidden',
-        }}>
-          {del
-            ? <span style={{ color: '#4b5563', fontSize: 13, fontStyle: 'italic' }}>🗑 This message was deleted</span>
-            : msg.type === 'text'
-            ? <p style={{ color: isMine ? '#e0eaff' : '#d1d5db', fontSize: 14, lineHeight: 1.6, margin: 0, wordBreak: 'break-word' }}>{msg.content}</p>
-            : msg.type === 'code'
-            ? <CodeBlock code={msg.content} language={msg.codeLanguage || 'plaintext'} />
-            : msg.type === 'image'
-            ? <div>
-                <img src={msg.fileUrl} alt="photo" style={{ maxWidth: 260, maxHeight: 280, borderRadius: 12, display: 'block', cursor: 'zoom-in' }} onClick={() => window.open(msg.fileUrl, '_blank')} />
-                {msg.content && msg.content !== '🖼 Photo' && <p style={{ color: '#9ca3af', fontSize: 12, margin: '6px 6px 3px' }}>{msg.content}</p>}
-              </div>
-            : msg.type === 'video'
-            ? <video src={msg.fileUrl} controls style={{ maxWidth: 260, maxHeight: 200, borderRadius: 12, display: 'block' }} />
-            : <a href={msg.fileUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,.04)', borderRadius: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 9, background: 'rgba(59,130,246,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <File size={16} color="#3b82f6" />
-                  </div>
-                  <div>
-                    <p style={{ color: '#fff', fontSize: 13, margin: 0, fontWeight: 600 }}>{msg.fileName || 'File'}</p>
-                    <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>{fmtSize(msg.fileSize)}</p>
-                  </div>
-                </div>
-              </a>
-          }
-        </div>
-        <p style={{ fontSize: 10, color: '#374151', marginTop: 3, textAlign: isMine ? 'right' : 'left', fontFamily: 'monospace' }}>
-          {isPending ? '⏳ sending…' : fmtTime(msg.createdAt)}
-        </p>
-      </div>
+    <div ref={ref} style={S.moreMenu}>
+      {[
+        { icon:<Share2 size={13}/>, label:'Share contact', fn:() => {
+            if (navigator.share) navigator.share({ title:username })
+            else { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!') }
+          }},
+        { icon:<Copy size={13}/>, label:'Copy username', fn:() => { navigator.clipboard.writeText(username); toast.success('Copied!') }},
+        { icon:<Trash2 size={13}/>, label:'Clear chat', fn:onClear, danger:true },
+      ].map(item => (
+        <button key={item.label}
+          style={{ ...S.moreItem, ...(item.danger ? { color:'#ef4444' }:{}) }}
+          onClick={() => { item.fn(); onClose() }}>
+          {item.icon}
+          <span style={{ fontSize:13 }}>{item.label}</span>
+        </button>
+      ))}
     </div>
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+//  Icon button — no border/borderColor conflict
+//  Uses borderWidth + borderStyle + borderColor separately
+// ─────────────────────────────────────────────
+function IconBtn({
+  onClick, label, active=false, children,
+}: {
+  onClick:()=>void; label:string; active?:boolean; children:React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      style={{
+        width:34, height:34, borderRadius:9,
+        borderWidth:1, borderStyle:'solid',
+        borderColor: active ? '#1e3a8a' : '#161616',
+        background:'#080808',
+        display:'flex', alignItems:'center', justifyContent:'center',
+        cursor:'pointer', color: active ? '#3b82f6':'#555',
+        transition:'all 0.15s', flexShrink:0,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+// ─────────────────────────────────────────────
+//  Main component
+// ─────────────────────────────────────────────
 export default function ChatPage() {
-  const params = useParams()
-  const targetUserId = (Array.isArray(params?.userId) ? params.userId[0] : params?.userId) as string | undefined
-  const router = useRouter()
+  const params       = useParams()
+  const router       = useRouter()
+  const targetUserId = params?.userId as string
 
   const { user: me, accessToken } = useAuthStore()
-  const { markSeen } = useDMStore()   // ✅ clear navbar DM badge
+  const { markSeen } = useDMStore()
 
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [otherUser,      setOtherUser]      = useState<any>(null)
-  const [messages,       setMessages]       = useState<any[]>([])
+  // ── State ──
+  const [loading,        setLoading]        = useState(true)
+  const [initError,      setInitError]      = useState<string|null>(null)
+  const [conversationId, setConversationId] = useState<string|null>(null)
+  const [otherUser,      setOtherUser]      = useState<OtherUser|null>(null)
+  const [messages,       setMessages]       = useState<Message[]>([])
   const [input,          setInput]          = useState('')
   const [sending,        setSending]        = useState(false)
-  const [uploading,      setUploading]      = useState(false)
-  const [hasMore,        setHasMore]        = useState(true)
-  const [loadingMore,    setLoadingMore]    = useState(false)
-  const [cursor,         setCursor]         = useState<string | null>(null)
-  const [typingOther,    setTypingOther]    = useState(false)
+  const [online,         setOnline]         = useState(false)
+  const [isTyping,       setIsTyping]       = useState(false)
+  const [showEmoji,      setShowEmoji]      = useState(false)
+  const [replyTo,        setReplyTo]        = useState<Message['replyTo']|null>(null)
+  const [showSearch,     setShowSearch]     = useState(false)
+  const [showMore,       setShowMore]       = useState(false)
   const [showScrollBtn,  setShowScrollBtn]  = useState(false)
   const [showCodeModal,  setShowCodeModal]  = useState(false)
-  const [codeInput,      setCodeInput]      = useState('')
-  const [codeLang,       setCodeLang]       = useState('javascript')
-  const [codeCaption,    setCodeCaption]    = useState('')
-  const [ctxMenu,        setCtxMenu]        = useState<any>(null)
-  const [deleteDialog,   setDeleteDialog]   = useState<any>(null)
 
-  const socketRef   = useRef<Socket | null>(null)
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const msgsEl      = useRef<HTMLDivElement>(null)
-  const fileRef     = useRef<HTMLInputElement>(null)
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const atBottom    = useRef(true)
+  // ── Multi-select state ──
+  const [selectMode,    setSelectMode]    = useState(false)
+  const [selected,      setSelected]      = useState<Set<string>>(new Set())
+  const [showDelModal,  setShowDelModal]  = useState(false)
 
-  // ── Load conversation & messages ──────────────────────────────
+  // ── Refs ──
+  const socketRef    = useRef<Socket|null>(null)
+  const bottomRef    = useRef<HTMLDivElement>(null)
+  const textareaRef  = useRef<HTMLTextAreaElement>(null)
+  const listRef      = useRef<HTMLDivElement>(null)
+  const imgInputRef  = useRef<HTMLInputElement>(null)   // gallery images
+  const fileInputRef = useRef<HTMLInputElement>(null)   // any file
+  const camInputRef  = useRef<HTMLInputElement>(null)   // camera capture
+  const msgRefs      = useRef<Record<string,HTMLDivElement|null>>({})
+  const typingTimer  = useRef<ReturnType<typeof setTimeout>|null>(null)
+  const didInit      = useRef(false)
+
+  // ── Upload state ──
+  const [uploading, setUploading] = useState(false)
+
+  // ── Derived ──
+  const [c1,c2]    = getAvatarColors(otherUser?.username)
+  const avatarInit = otherUser?.username?.[0]?.toUpperCase() ?? '?'
+  const pinnedMsgs = messages.filter(m => m.pinned)
+
+  // ─────────────────────────────────────────
+  //  Auth hydration — works on hard refresh
+  //  Zustand-persist rehydrates async from localStorage, so on page
+  //  load `me` and `accessToken` from useAuthStore() start as null.
+  //  We subscribe to the store and set local state once they appear.
+  // ─────────────────────────────────────────
+  const [authReady, setAuthReady] = useState(() => {
+    const s = useAuthStore.getState()
+    return !!(s.user && s.accessToken)
+  })
+
   useEffect(() => {
-    if (!targetUserId) return
-    async function init() {
+    // Already hydrated (normal navigation, not hard refresh)
+    const s = useAuthStore.getState()
+    if (s.user && s.accessToken) { setAuthReady(true); return }
+
+    // Wait for persist to rehydrate
+    const unsub = useAuthStore.subscribe((s) => {
+      if (s.user && s.accessToken) {
+        setAuthReady(true)
+        unsub()
+      }
+    })
+    return () => unsub()
+  }, [])
+
+  // ─────────────────────────────────────────
+  //  Load conversation once auth is ready
+  // ─────────────────────────────────────────
+  useEffect(() => {
+    if (!targetUserId || !authReady || didInit.current) return
+    didInit.current = true
+
+    const { user: u, accessToken: t } = useAuthStore.getState()
+
+    ;(async () => {
       try {
+        setLoading(true); setInitError(null)
         const r = await api.post(`/chat/conversations/${targetUserId}`)
         const { conversationId: cid, other } = r.data.data
-        setConversationId(cid)
-        setOtherUser(other)
-        // ✅ Clear DM badge immediately when you open the chat
-        markSeen(cid)
-
+        setConversationId(cid); setOtherUser(other); markSeen(cid)
         const m = await api.get(`/chat/conversations/${cid}/messages`)
-        const msgs: any[] = m.data.data
-        setMessages(msgs)
-        if (msgs.length < 40) setHasMore(false)
-        if (msgs.length > 0)  setCursor(msgs[0].id)
-        setTimeout(() => bottomRef.current?.scrollIntoView(), 80)
-      } catch { toast.error('Failed to load chat') }
-    }
-    init()
-  }, [targetUserId])
+        setMessages(m.data.data ?? [])
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'auto' }), 80)
+      } catch (err: any) {
+        const msg = err?.response?.data?.message ?? 'Failed to load chat'
+        setInitError(msg)
+        toast.error(msg)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [targetUserId, authReady])
 
-  // ── Socket ────────────────────────────────────────────────────
+  // ── Socket ──
+  // NOTE: `mounted` guard prevents React Strict Mode's double-invoke from
+  //       connecting a socket that is immediately torn down, which causes
+  //       "WebSocket closed before connection established" in dev mode.
   useEffect(() => {
     if (!conversationId || !accessToken) return
-    const sock = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
-      auth: { token: accessToken }, transports: ['websocket'],
+    let mounted = true
+
+    // Disconnect any stale socket first
+    if (socketRef.current) {
+      socketRef.current.disconnect()
+      socketRef.current = null
+    }
+
+    const SOCKET_URL =
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      process.env.NEXT_PUBLIC_API_URL    ||
+      'http://localhost:5000'
+
+    const sock = io(SOCKET_URL, {
+      auth               : { token: accessToken },
+      transports         : ['websocket'],
+      reconnection       : true,
+      reconnectionDelay  : 1000,
+      reconnectionAttempts: 5,
+      // Delay connection slightly so cleanup from Strict Mode unmount
+      // can cancel before the socket is actually opened
+      autoConnect: false,
     })
+
     socketRef.current = sock
-    sock.emit('join_conversation', conversationId)
 
-    // ✅ Replace optimistic bubble (sender) or add new message (receiver)
-    sock.on('new_message', (msg: any) => {
-      setMessages(prev => {
-        const pendingIdx = prev.findIndex(m => m._pending && m.content === msg.content && m.type === msg.type)
-        if (pendingIdx !== -1) {
-          const updated = [...prev]
-          updated[pendingIdx] = msg
-          return updated
-        }
-        if (prev.find(m => m.id === msg.id)) return prev
-        return [...prev, msg]
-      })
-      // Also clear badge in case a message comes in while we're viewing
+    // Only start connecting if still mounted
+    const connectTimer = setTimeout(() => {
+      if (!mounted) return
+      sock.connect()
+    }, 50)
+
+    sock.on('connect', () => {
+      if (mounted) sock.emit('join_conversation', conversationId)
+    })
+    sock.on('connect_error', err => console.warn('[socket]', err.message))
+
+    sock.on('new_message', (msg: Message) => {
+      if (!mounted) return
+      setMessages(p => p.find(m => m.id === msg.id) ? p : [...p, msg])
       markSeen(conversationId)
-      if (atBottom.current) setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 40)
-      else setShowScrollBtn(true)
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 40)
     })
-
-    sock.on('message_deleted', ({ messageId }: any) =>
-      setMessages(p => p.map(m => m.id === messageId ? { ...m, isDeleted: true } : m)))
-
-    sock.on('messages_deleted', ({ messageIds }: any) => {
-      const s = new Set<string>(messageIds)
-      setMessages(p => p.map(m => s.has(m.id) ? { ...m, isDeleted: true } : m))
+    sock.on('message_reaction', ({ msgId, reactions }: any) => {
+      if (mounted) setMessages(p => p.map(m => m.id === msgId ? { ...m, reactions } : m))
     })
+    sock.on('message_pinned', ({ msgId, pinned }: any) => {
+      if (mounted) setMessages(p => p.map(m => m.id === msgId ? { ...m, pinned } : m))
+    })
+    sock.on('messages_seen', ({ by }: any) => {
+      if (mounted && by === otherUser?.id)
+        setMessages(p => p.map(m => m.senderId === me?.id ? { ...m, seen: true } : m))
+    })
+    sock.on('user_typing',      ({ userId }: any) => { if (mounted && userId === otherUser?.id) setIsTyping(true)  })
+    sock.on('user_stop_typing', ({ userId }: any) => { if (mounted && userId === otherUser?.id) setIsTyping(false) })
+    sock.on('user_online',      ({ userId }: any) => { if (mounted && userId === otherUser?.id) setOnline(true)  })
+    sock.on('user_offline',     ({ userId }: any) => { if (mounted && userId === otherUser?.id) setOnline(false) })
 
-    sock.on('user_typing',         () => setTypingOther(true))
-    sock.on('user_stopped_typing', () => setTypingOther(false))
-
-    return () => { sock.emit('leave_conversation', conversationId); sock.disconnect() }
+    return () => {
+      mounted = false
+      clearTimeout(connectTimer)
+      if (sock.connected) sock.emit('leave_conversation', conversationId)
+      sock.disconnect()
+      socketRef.current = null
+    }
   }, [conversationId, accessToken])
 
-  // ── Scroll ────────────────────────────────────────────────────
-  const onScroll = useCallback(() => {
-    const el = msgsEl.current; if (!el) return
-    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
-    setShowScrollBtn(!atBottom.current)
-    if (el.scrollTop < 80 && hasMore && !loadingMore) loadOlder()
-  }, [hasMore, loadingMore])
+  // ── Scroll FAB ──
+  useEffect(() => {
+    const el = listRef.current; if (!el) return
+    const h = () => setShowScrollBtn(el.scrollHeight-el.scrollTop-el.clientHeight > 200)
+    el.addEventListener('scroll', h)
+    return () => el.removeEventListener('scroll', h)
+  }, [])
 
-  async function loadOlder() {
-    if (!conversationId || !cursor || loadingMore) return
-    setLoadingMore(true)
-    try {
-      const r = await api.get(`/chat/conversations/${conversationId}/messages?cursor=${cursor}`)
-      const older: any[] = r.data.data
-      if (older.length < 40) setHasMore(false)
-      if (older.length > 0) {
-        setCursor(older[0].id)
-        const prevH = msgsEl.current?.scrollHeight || 0
-        setMessages(p => [...older, ...p])
-        setTimeout(() => { if (msgsEl.current) msgsEl.current.scrollTop = msgsEl.current.scrollHeight - prevH }, 40)
-      }
-    } finally { setLoadingMore(false) }
-  }
+  // ─────────────────────────────────────────
+  //  Actions
+  // ─────────────────────────────────────────
+  const jumpTo = useCallback((id:string) => {
+    const el = msgRefs.current[id]; if (!el) return
+    el.scrollIntoView({ behavior:'smooth', block:'center' })
+    el.style.background = 'rgba(59,130,246,0.1)'
+    setTimeout(() => { if (el) el.style.background='' }, 1200)
+  }, [])
 
-  // ── Typing indicator ──────────────────────────────────────────
-  function onInput(v: string) {
-    setInput(v)
-    if (!socketRef.current || !conversationId) return
-    socketRef.current.emit('typing_start', { conversationId })
+  const emitTyping = useCallback(() => {
+    if (!conversationId) return
+    socketRef.current?.emit('typing', { conversationId })
     if (typingTimer.current) clearTimeout(typingTimer.current)
-    typingTimer.current = setTimeout(() => socketRef.current?.emit('typing_stop', { conversationId }), 1400)
-  }
+    typingTimer.current = setTimeout(() => socketRef.current?.emit('stop_typing', { conversationId }), 2000)
+  }, [conversationId])
 
-  // ── Send text (with optimistic update) ───────────────────────
-  async function sendText() {
-    if (!input.trim() || !conversationId || sending) return
+  async function sendMessage() {
     const content = input.trim()
-    setInput('')
-    setSending(true)
-    socketRef.current?.emit('typing_stop', { conversationId })
-
-    const tempId = `temp-${Date.now()}`
-    const optimistic = {
-      id: tempId, content, type: 'text',
-      senderId: me?.id,
-      sender: { id: me?.id, username: me?.username },
-      createdAt: new Date().toISOString(),
-      isDeleted: false, _pending: true,
-    }
-    setMessages(p => [...p, optimistic])
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 40)
-
-    try {
-      await api.post(`/chat/conversations/${conversationId}/messages`, { content })
-    } catch {
-      setMessages(p => p.filter(m => m.id !== tempId))
-      setInput(content)
-      toast.error('Failed to send')
-    } finally { setSending(false) }
+    if (!content || !conversationId || sending) return
+    setSending(true); setInput(''); setReplyTo(null); setShowEmoji(false)
+    if (textareaRef.current) textareaRef.current.style.height='auto'
+    try { await api.post(`/chat/conversations/${conversationId}/messages`, { content, replyTo:replyTo??undefined }) }
+    catch { toast.error('Send failed'); setInput(content) }
+    finally { setSending(false) }
   }
 
-  // ── Send code ─────────────────────────────────────────────────
-  async function sendCode() {
-    if (!codeInput.trim() || !conversationId) return
+  async function sendCode(code:string, lang:string) {
+    if (!conversationId) return
     try {
-      await api.post(`/chat/conversations/${conversationId}/code`, {
-        code: codeInput.trim(), language: codeLang, caption: codeCaption,
+      await api.post(`/chat/conversations/${conversationId}/messages`, {
+        content:`\`\`\`${lang}\n${code}\n\`\`\``,
+        fileType:'code', language:lang,
       })
-      setShowCodeModal(false); setCodeInput(''); setCodeCaption('')
-      toast.success('Code shared!')
-    } catch { toast.error('Failed') }
+    } catch { toast.error('Failed to send code') }
   }
 
-  // ── Upload ────────────────────────────────────────────────────
-  async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !conversationId) return
+  async function reactToMessage(msgId: string, emoji: string) {
+    if (!conversationId || !me) return
+    // Optimistic toggle
+    setMessages(p => p.map(m => {
+      if (m.id !== msgId) return m
+      const reactions = { ...(m.reactions ?? {}) }
+      const users     = reactions[emoji] ?? []
+      reactions[emoji] = users.includes(me.id)
+        ? users.filter(x => x !== me.id)
+        : [...users, me.id]
+      if (!reactions[emoji].length) delete reactions[emoji]
+      return { ...m, reactions }
+    }))
+    try {
+      await api.post(
+        `/chat/conversations/${conversationId}/messages/${msgId}/react`,
+        { emoji },
+      )
+    } catch {
+      // Silently keep optimistic state
+    }
+  }
+
+  function togglePin(msg: Message) {
+    // Always toggle locally — persists for this session
+    const newPinned = !msg.pinned
+    setMessages(p => p.map(m => m.id === msg.id ? { ...m, pinned: newPinned } : m))
+    // Fire-and-forget to backend (do not await, do not show error)
+    if (conversationId) {
+      api.post(
+        `/chat/conversations/${conversationId}/messages/${msg.id}/pin`,
+        { pinned: newPinned },
+      ).catch(() => {/* backend optional */})
+    }
+  }
+
+  async function uploadFile(file: File, type: 'image' | 'file') {
+    if (!conversationId) { toast.error('No conversation'); return }
     setUploading(true)
+
+    // ── Try multipart upload endpoint first ──
     try {
-      const fd = new FormData(); fd.append('file', file)
-      const ep = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file'
-      await api.post(`/chat/conversations/${conversationId}/${ep}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    } catch { toast.error('Upload failed') }
-    finally { setUploading(false); e.target.value = '' }
-  }
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('type', type)
+      await api.post(
+        `/chat/conversations/${conversationId}/messages/upload`,
+        fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      )
+      toast.success(type === 'image' ? '📷 Image sent' : '📎 File sent')
+      setUploading(false)
+      return
+    } catch (err: any) {
+      // If endpoint doesn't exist (404/405), fall back to base64 inline
+      const status = err?.response?.status
+      if (status !== 404 && status !== 405) {
+        toast.error('Upload failed')
+        setUploading(false)
+        return
+      }
+    }
 
-  function handleContextMenu(e: React.MouseEvent, msg: any, isMine: boolean) {
-    if (msg._pending) return
-    e.preventDefault()
-    setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 180), y: Math.min(e.clientY, window.innerHeight - 240), msg, isMine })
-  }
-
-  async function handleDeleteForMe() {
-    if (!deleteDialog) return
+    // ── Fallback: send file as base64 data-URL inside a message ──
     try {
-      await api.delete(`/chat/messages/${deleteDialog.msg.id}`)
-      setMessages(p => p.map(m => m.id === deleteDialog.msg.id ? { ...m, isDeleted: true } : m))
-      toast.success('Deleted for you')
-    } catch { toast.error('Failed') }
-    setDeleteDialog(null)
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const reader = new FileReader()
+        reader.onload  = () => res(reader.result as string)
+        reader.onerror = rej
+        reader.readAsDataURL(file)
+      })
+      await api.post(`/chat/conversations/${conversationId}/messages`, {
+        content : '',
+        fileUrl : dataUrl,
+        fileType: type,
+        fileName: file.name,
+      })
+      toast.success(type === 'image' ? '📷 Image sent' : '📎 File sent')
+    } catch {
+      toast.error('Upload failed')
+    } finally {
+      setUploading(false)
+    }
   }
 
-  async function handleDeleteForEveryone() {
-    if (!deleteDialog) return
-    try { await api.delete(`/chat/messages/${deleteDialog.msg.id}`); toast.success('Deleted for everyone') }
-    catch { toast.error('Failed') }
-    setDeleteDialog(null)
+  function handleImageInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) uploadFile(file, 'image')
+    e.target.value = ''
   }
 
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const isImage = file.type.startsWith('image/')
+    uploadFile(file, isImage ? 'image' : 'file')
+    e.target.value = ''
+  }
+
+  function handleCameraInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) uploadFile(file, 'image')
+    e.target.value = ''
+  }
+
+  async function clearChat() {
+    if (!conversationId) return
+    try { await api.delete(`/chat/conversations/${conversationId}/messages`); setMessages([]); toast.success('Chat cleared') }
+    catch { toast.error('Could not clear chat') }
+  }
+
+  // ── Multi-select ──
+  function toggleSelect(id:string) {
+    setSelected(prev => {
+      const n=new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }
+
+  function exitSelectMode() { setSelectMode(false); setSelected(new Set()) }
+
+  function deleteForMe() {
+    const ids = [...selected]
+    setMessages(p => p.filter(m => !ids.includes(m.id)))
+    exitSelectMode()
+    if (conversationId) {
+      api.post(`/chat/conversations/${conversationId}/messages/delete-for-me`, { messageIds: ids })
+        .catch(() => {/* backend optional */})
+    }
+  }
+
+  function deleteForAll() {
+    const ids = [...selected]
+    setMessages(p => p.filter(m => !ids.includes(m.id)))
+    exitSelectMode()
+    if (conversationId) {
+      api.post(`/chat/conversations/${conversationId}/messages/delete-for-all`, { messageIds: ids })
+        .catch(() => {/* backend optional */})
+    }
+  }
+
+  // ─────────────────────────────────────────
+  //  Parse code blocks from message content
+  // ─────────────────────────────────────────
+  function parseContent(msg:Message) {
+    const codeRegex = /^```(\w+)?\n([\s\S]*?)\n```$/
+    const match = msg.content?.match(codeRegex)
+    if (match || msg.fileType==='code') {
+      const lang  = match?.[1] ?? msg.language ?? 'code'
+      const code  = match?.[2] ?? msg.content ?? ''
+      return { isCode:true, lang, code }
+    }
+    return { isCode:false, lang:'', code:'' }
+  }
+
+  // ─────────────────────────────────────────
+  //  Loading / error screens
+  // ─────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={S.fullCenter}>
+        <div style={{ display:'flex', gap:7 }}>
+          {[0,1,2].map(i => (
+            <div key={i} style={{ width:9, height:9, borderRadius:'50%', background:'#1d4ed8',
+              animation:`pulse 1s ${i*0.18}s ease-in-out infinite` }}/>
+          ))}
+        </div>
+        <style>{`@keyframes pulse{0%,100%{opacity:.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1.1)}}`}</style>
+      </div>
+    )
+  }
+
+  if (initError) {
+    return (
+      <div style={S.fullCenter}>
+        <p style={{ color:'#555', fontSize:14, marginBottom:16 }}>{initError}</p>
+        <button onClick={() => { didInit.current=false; setInitError(null); setLoading(true); setAuthReady(!!(useAuthStore.getState().user && useAuthStore.getState().accessToken)) }}
+          style={{ padding:'8px 20px', borderRadius:10, background:'#1d4ed8', border:'none', color:'#fff', cursor:'pointer', fontSize:14 }}>
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────
+  //  Render
+  // ─────────────────────────────────────────
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:3px;height:3px}
-        ::-webkit-scrollbar-thumb{background:#1c1c2e;border-radius:2px}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
-        @keyframes ctxIn{from{opacity:0;transform:scale(.95) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
-        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-        .tdot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#3b82f6;animation:blink 1.2s infinite}
-        .tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
-        .inp:focus{outline:none;border-color:rgba(59,130,246,.5)!important}
-        textarea:focus{outline:none}
-        .sbtn:hover{background:#2563eb!important}
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        ::-webkit-scrollbar       { width:3px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:#1a1a1a; border-radius:4px; }
+        @keyframes msgIn        { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes shimmer      { to{background-position:-200% 0} }
+        @keyframes typingBounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-4px)} }
+        .msg-row:hover .msg-actions { opacity:1!important; pointer-events:auto!important; }
+        .chat-ta:focus { outline:none; border-width:1px; border-style:solid; border-color:#1e3a8a!important; box-shadow:0 0 0 3px rgba(29,78,216,0.08); }
+        .ib-hover:hover { background:#111!important; color:#888!important; }
+        .send-btn:hover:not(:disabled) { filter:brightness(1.15); transform:scale(1.04); }
+        .mi:hover { background:#111!important; }
+        .sh:hover { background:#0c0c0c!important; }
+        .qp-item:hover { transform:scale(1.3); }
+        .emoji-btn:hover { transform:scale(1.2); }
+        .act-btn:hover { color:#aaa!important; background:#111!important; }
+        .msg-row-sel { background:rgba(29,78,216,0.06)!important; border-radius:8px; }
       `}</style>
 
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#06070d', overflow: 'hidden' }}>
+      {/* Code share modal */}
+      {showCodeModal && <CodeModal onSend={sendCode} onClose={() => setShowCodeModal(false)}/>}
 
-        {/* ── HEADER ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', background: '#0a0b14', borderBottom: '1px solid rgba(255,255,255,.05)', flexShrink: 0 }}>
-          <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', display: 'flex', padding: 4 }}>
-            <ArrowLeft size={18} />
-          </button>
-          <div style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, background: 'linear-gradient(135deg,#374151,#1f2937)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, color: '#fff' }}>
-            {otherUser?.username?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div>
-            <p style={{ color: '#f0f0f0', fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>{otherUser?.username ?? '...'}</p>
-            <p style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>
-              {typingOther
-                ? <span style={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    typing <span className="tdot" /><span className="tdot" /><span className="tdot" />
-                  </span>
-                : otherUser?.tier ?? ''}
-            </p>
-          </div>
-        </div>
+      {/* Delete confirmation modal */}
+      {showDelModal && (
+        <DeleteModal
+          count={selected.size}
+          onDeleteForMe={deleteForMe}
+          onDeleteForAll={deleteForAll}
+          onClose={() => setShowDelModal(false)}
+        />
+      )}
 
-        {/* ── MESSAGES ── */}
-        <div ref={msgsEl} onScroll={onScroll} style={{ flex: 1, overflowY: 'auto', padding: '12px 0' }}>
-          {loadingMore && (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <div style={{ width: 16, height: 16, border: '2px solid #1a1a2e', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin .8s linear infinite', display: 'inline-block' }} />
+      <div style={S.root}>
+
+        {/* ══════════════════════════════
+            HEADER
+        ══════════════════════════════ */}
+        <header style={S.header}>
+          {/* Multi-select mode header */}
+          {selectMode ? (
+            <>
+              <button style={S.closeBtn} onClick={exitSelectMode}><X size={16}/></button>
+              <span style={{ flex:1, fontSize:15, fontWeight:600, color:'#e4e4e7' }}>
+                {selected.size} selected
+              </span>
+              {selected.size>0 && (
+                <button
+                  onClick={() => setShowDelModal(true)}
+                  style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px',
+                    borderRadius:9, background:'#1c0a0a',
+                    borderWidth:1, borderStyle:'solid', borderColor:'#3a1010',
+                    color:'#ef4444', cursor:'pointer', fontSize:13 }}>
+                  <Trash2 size={14}/> Delete
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <IconBtn onClick={() => router.back()} label="Back">
+                <ArrowLeft size={16}/>
+              </IconBtn>
+
+              <div style={{ position:'relative', flexShrink:0 }}>
+                <div style={{ ...S.avatar, background:`linear-gradient(135deg,${c1},${c2})` }}>
+                  {avatarInit}
+                </div>
+                {online && <span style={S.onlineDot}/>}
+              </div>
+
+              <div style={{ flex:1, minWidth:0 }}>
+                <p style={S.headerName}>{otherUser?.username ?? '…'}</p>
+                <p style={{ fontSize:12, marginTop:1, color:online ? '#22c55e':'#383838' }}>
+                  {online ? '● Online' : (otherUser?.tier ?? 'Offline')}
+                </p>
+              </div>
+
+              <div style={{ display:'flex', gap:6, position:'relative' }}>
+                <IconBtn onClick={() => toast('Calling '+(otherUser?.username??''), { icon:'📞' })} label="Call">
+                  <Phone size={14}/>
+                </IconBtn>
+
+                <IconBtn onClick={() => setShowSearch(v=>!v)} label="Search" active={showSearch}>
+                  <Search size={14}/>
+                </IconBtn>
+
+                {/* Multi-select toggle */}
+                <IconBtn onClick={() => setSelectMode(true)} label="Select messages">
+                  <CheckSquare size={14}/>
+                </IconBtn>
+
+                <div style={{ position:'relative' }}>
+                  <IconBtn onClick={() => setShowMore(v=>!v)} label="More" active={showMore}>
+                    <MoreVertical size={14}/>
+                  </IconBtn>
+                  {showMore && (
+                    <MoreMenu onClose={() => setShowMore(false)} username={otherUser?.username??''} onClear={clearChat}/>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </header>
+
+        {/* Pinned */}
+        {!selectMode && pinnedMsgs.length>0 && <PinnedBanner pinned={pinnedMsgs} onJump={jumpTo}/>}
+
+        {/* Search */}
+        {showSearch && <SearchOverlay messages={messages} onClose={() => setShowSearch(false)} onJump={jumpTo}/>}
+
+        {/* ══════════════════════════════
+            MESSAGES
+        ══════════════════════════════ */}
+        <main ref={listRef} style={S.messages} role="log" aria-live="polite">
+          {!messages.length && (
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10 }}>
+              <span style={{ fontSize:40 }}>👋</span>
+              <p style={{ color:'#2a2a2a', fontSize:14 }}>No messages yet — say hello!</p>
             </div>
           )}
-          {messages.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-              <div style={{ fontSize: 44, marginBottom: 14 }}>💬</div>
-              <p style={{ color: '#374151', fontSize: 14 }}>No messages yet. Say hi!</p>
-            </div>
-          )}
-          {messages.map(msg => {
-            const isMine = !!(
-              (me?.id && msg.sender?.id  && msg.sender.id  === me.id) ||
-              (me?.id && msg.senderId    && msg.senderId   === me.id)
+
+          {messages.map((msg, idx) => {
+            const mine     = msg.senderId === me?.id
+            const showDate = newDay(messages, idx)
+            const lastGrp  = lastInGroup(messages, idx)
+            const firstGrp = idx===0 || messages[idx-1].senderId!==msg.senderId
+            const isSel    = selected.has(msg.id)
+            const { isCode, lang, code } = parseContent(msg)
+
+            return (
+              <div
+                key={msg.id}
+                ref={el => { msgRefs.current[msg.id]=el }}
+                className={isSel ? 'msg-row-sel' : ''}
+                style={{ marginTop:firstGrp&&idx!==0 ? 10:2, transition:'background 0.3s',
+                  cursor: selectMode ? 'pointer':'default', padding:'0 4px' }}
+                onClick={() => { if (selectMode) toggleSelect(msg.id) }}
+                onMouseDown={(e) => {
+                  if (selectMode) return
+                  const id = msg.id
+                  const t = window.setTimeout(() => { setSelectMode(true); setSelected(new Set([id])) }, 600)
+                  const cancel = () => window.clearTimeout(t)
+                  window.addEventListener('mouseup',   cancel, { once: true })
+                  window.addEventListener('mousemove', cancel, { once: true })
+                }}
+                onTouchStart={(e) => {
+                  if (selectMode) return
+                  const id = msg.id
+                  const t = window.setTimeout(() => { setSelectMode(true); setSelected(new Set([id])) }, 600)
+                  const cancel = () => window.clearTimeout(t)
+                  window.addEventListener('touchend',  cancel, { once: true })
+                  window.addEventListener('touchmove', cancel, { once: true })
+                }}
+              >
+                {showDate && (
+                  <div style={{ display:'flex', alignItems:'center', gap:10, margin:'14px 0 8px' }}>
+                    <div style={{ flex:1, height:1, background:'#0f0f0f' }}/>
+                    <span style={{ fontSize:11, color:'#2a2a2a', letterSpacing:0.5 }}>{fmtDate(msg.createdAt)}</span>
+                    <div style={{ flex:1, height:1, background:'#0f0f0f' }}/>
+                  </div>
+                )}
+
+                <div className={selectMode ? '' : 'msg-row'}
+                  style={{ display:'flex', alignItems:'flex-end', gap:6,
+                    animation: selectMode ? 'none':'msgIn 0.2s ease',
+                    justifyContent: mine ? 'flex-end':'flex-start' }}>
+
+                  {/* Select checkbox */}
+                  {selectMode && (
+                    <div style={{ flexShrink:0, color: isSel ? '#3b82f6':'#333' }}>
+                      {isSel ? <CheckSquare size={18}/> : <Square size={18}/>}
+                    </div>
+                  )}
+
+                  {/* Their avatar */}
+                  {!mine && !selectMode && (
+                    lastGrp
+                      ? <div style={{ ...S.msgAv, background:`linear-gradient(135deg,${c1},${c2})` }}>{avatarInit}</div>
+                      : <div style={{ width:28, flexShrink:0 }}/>
+                  )}
+
+                  {/* Bubble column */}
+                  <div style={{ maxWidth:'72%', display:'flex', flexDirection:'column', alignItems:mine?'flex-end':'flex-start' }}>
+                    <div style={{
+                      ...S.bubble,
+                      ...(mine ? S.bubbleMine : S.bubbleTheirs),
+                      borderBottomRightRadius: mine ? 4:18,
+                      borderBottomLeftRadius : mine ? 18:4,
+                      ...(isSel ? { borderColor:'#1d4ed8' } : {}),
+                    }}>
+                      {msg.replyTo && <InBubbleReply r={msg.replyTo}/>}
+
+                      {/* Code block */}
+                      {isCode
+                        ? <CodeBlock code={code} lang={lang} mine={mine}/>
+                        : (
+                          <>
+                            {msg.fileType==='image' && msg.fileUrl && (
+                              <img src={msg.fileUrl} alt="" style={{ maxWidth:220, borderRadius:10, display:'block', marginBottom:6, objectFit:'cover' }} loading="lazy"/>
+                            )}
+                            {msg.fileType==='file' && msg.fileUrl && (
+                              <a href={msg.fileUrl} target="_blank" rel="noreferrer"
+                                style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 10px', borderRadius:8, background:'#111', color:'#6b7280', fontSize:12, textDecoration:'none', marginBottom:6 }}>
+                                📎 {msg.fileName ?? 'File'}
+                              </a>
+                            )}
+                            {msg.content && <p style={{ fontSize:14, lineHeight:1.55 }}>{msg.content}</p>}
+                          </>
+                        )
+                      }
+
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:4, marginTop:4, fontSize:10, opacity:0.45 }}>
+                        <span>{fmtTime(msg.createdAt)}</span>
+                        {mine && (msg.seen
+                          ? <CheckCheck size={11} style={{ color:'#3b82f6' }}/>
+                          : <Check      size={11} style={{ color:'#333'    }}/>
+                        )}
+                      </div>
+                    </div>
+
+                    {!selectMode && (
+                      <ReactionBar msgId={msg.id} myId={me?.id??''} reactions={msg.reactions??{}} onReact={reactToMessage}/>
+                    )}
+                  </div>
+
+                  {/* Hover action buttons (reply + pin) */}
+                  {!selectMode && (
+                    <div className="msg-actions" style={{
+                      display:'flex', flexDirection:'column', gap:3,
+                      opacity:0, transition:'opacity 0.15s', pointerEvents:'none',
+                      ...(mine ? { order:-1, marginRight:6, marginLeft:0 }:{ marginLeft:6 }),
+                    }}>
+                      <button className="act-btn" style={S.actBtn} title="Reply"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setReplyTo({ id: msg.id, content: msg.content, senderName: mine ? 'You' : (otherUser?.username ?? '') })
+                          setShowEmoji(false)
+                          textareaRef.current?.focus()
+                        }}>
+                        <Reply size={12}/>
+                      </button>
+                      <button className="act-btn" style={{ ...S.actBtn, color:msg.pinned?'#facc15':'#333' }}
+                        title={msg.pinned?'Unpin':'Pin'}
+                        onClick={(e) => { e.stopPropagation(); togglePin(msg) }}>
+                        {msg.pinned ? <PinOff size={12}/> : <Pin size={12}/>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             )
-            return <Bubble key={msg.id} msg={msg} isMine={isMine} onContextMenu={handleContextMenu} />
           })}
-          <div ref={bottomRef} />
-        </div>
 
+          {isTyping && <TypingIndicator name={otherUser?.username??''}/>}
+          <div ref={bottomRef}/>
+        </main>
+
+        {/* Scroll FAB */}
         {showScrollBtn && (
-          <button onClick={() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setShowScrollBtn(false) }}
-            style={{ position: 'fixed', bottom: 90, right: 18, width: 34, height: 34, borderRadius: '50%', background: '#1d4ed8', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,.6)', zIndex: 10 }}>
-            <ChevronDown size={16} />
+          <button style={S.scrollFab} onClick={() => bottomRef.current?.scrollIntoView({ behavior:'smooth' })}>
+            <ChevronDown size={16}/>
           </button>
         )}
 
-        {/* ── INPUT BAR ── */}
-        <div style={{ padding: '10px 14px 14px', background: '#0a0b14', borderTop: '1px solid rgba(255,255,255,.04)', flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 7, marginBottom: 8 }}>
-            <button onClick={() => setShowCodeModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(59,130,246,.07)', border: '1px solid rgba(59,130,246,.2)', color: '#3b82f6', borderRadius: 8, padding: '5px 11px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-              <Code2 size={12} /> Code
-            </button>
-            <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={onFileChange}
-              accept="image/*,video/*,.pdf,.zip,.doc,.docx,.txt,.csv,.json,.js,.ts,.py,.java,.cpp,.c,.go,.rs" />
-            <button onClick={() => fileRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', color: '#6b7280', borderRadius: 8, padding: '5px 11px', fontSize: 11, cursor: 'pointer' }}>
-              {uploading
-                ? <div style={{ width: 12, height: 12, border: '2px solid #333', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
-                : <Paperclip size={12} />}
-              {uploading ? 'Uploading...' : 'Attach'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <textarea className="inp" value={input}
-              onChange={e => onInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText() } }}
-              placeholder="Message… (right-click for options)"
-              rows={1}
-              style={{ flex: 1, background: '#0f1018', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: '11px 15px', color: '#f0f0f0', fontSize: 14, resize: 'none', fontFamily: 'Inter,sans-serif', lineHeight: 1.55, maxHeight: 120, overflowY: 'auto' }}
-              onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px' }}
-            />
-            <button className="sbtn" onClick={sendText} disabled={!input.trim() || sending}
-              style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', flexShrink: 0, background: input.trim() ? '#3b82f6' : '#0f1018', color: input.trim() ? '#fff' : '#252535', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: input.trim() ? 'pointer' : 'not-allowed', transition: 'all .2s' }}>
-              <Send size={16} />
-            </button>
-          </div>
-          <p style={{ color: '#1f2937', fontSize: 10, textAlign: 'center', marginTop: 5 }}>Enter to send · Shift+Enter new line · Right-click for options</p>
-        </div>
-      </div>
+        {/* ══════════════════════════════
+            FOOTER (hidden in select mode)
+        ══════════════════════════════ */}
+        {!selectMode && (
+          <footer style={S.footer}>
+            {showEmoji && <EmojiPanel onSelect={e => { setInput(v=>v+e); textareaRef.current?.focus() }}/>}
+            <ReplyStrip reply={replyTo ?? undefined} onCancel={() => { setReplyTo(null); textareaRef.current?.focus() }}/>
 
-      {/* ── OVERLAYS ── */}
-      {ctxMenu && (
-        <ContextMenu
-          x={ctxMenu.x} y={ctxMenu.y} isMine={ctxMenu.isMine}
-          onClose={() => setCtxMenu(null)}
-          onDelete={() => { setDeleteDialog({ msg: ctxMenu.msg, isMine: ctxMenu.isMine }); setCtxMenu(null) }}
-          onCopy={() => { navigator.clipboard.writeText(ctxMenu.msg.content); toast.success('Copied!') }}
-          onForward={() => toast('Forward coming soon')}
-          onPin={() => toast('Pin coming soon')}
-          onInfo={() => toast(`Sent at ${fmtTime(ctxMenu.msg.createdAt)}`)}
-        />
-      )}
-      {deleteDialog && (
-        <DeleteDialog
-          isMine={deleteDialog.isMine}
-          onClose={() => setDeleteDialog(null)}
-          onDeleteForMe={handleDeleteForMe}
-          onDeleteForEveryone={handleDeleteForEveryone}
-        />
-      )}
-      {showCodeModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
-          onClick={e => e.target === e.currentTarget && setShowCodeModal(false)}>
-          <div style={{ background: '#0a0b14', border: '1px solid rgba(255,255,255,.08)', borderRadius: 20, width: '100%', maxWidth: 700, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(59,130,246,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Code2 size={15} color="#3b82f6" />
-                </div>
-                <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>Share Code</span>
-              </div>
-              <button onClick={() => setShowCodeModal(false)} style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
-                <X size={16} />
+            <div style={{ display:'flex', alignItems:'flex-end', gap:8, padding:'8px 10px 10px' }}>
+              {/* Emoji */}
+              <button style={{ ...S.iconBtn2, color:showEmoji?'#3b82f6':'#444' }}
+                onClick={() => setShowEmoji(v=>!v)} aria-label="Emoji">
+                <Smile size={18}/>
               </button>
-            </div>
-            <div style={{ padding: '10px 18px', borderBottom: '1px solid rgba(255,255,255,.03)', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {LANGUAGES.map(lang => {
-                const lc = LANG_COLORS[lang]; const active = codeLang === lang
-                return (
-                  <button key={lang} onClick={() => setCodeLang(lang)}
-                    style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', background: active ? `${lc}18` : 'rgba(255,255,255,.03)', border: `1px solid ${active ? lc + '50' : 'rgba(255,255,255,.05)'}`, color: active ? lc : '#6b7280' }}>
-                    {lang}
-                  </button>
-                )
-              })}
-            </div>
-            <textarea value={codeInput} onChange={e => setCodeInput(e.target.value)}
-              placeholder={`// Paste or write ${codeLang} code…`}
-              style={{ width: '100%', minHeight: 220, maxHeight: 320, background: '#07090f', border: 'none', color: '#c9d1d9', fontSize: 13, lineHeight: 1.8, padding: '14px 18px', resize: 'none', fontFamily: "'JetBrains Mono',monospace", outline: 'none' }}
-            />
-            <div style={{ display: 'flex', gap: 10, padding: '11px 18px', borderTop: '1px solid rgba(255,255,255,.04)' }}>
-              <input value={codeCaption} onChange={e => setCodeCaption(e.target.value)}
-                placeholder="Caption (optional)"
-                style={{ flex: 1, background: '#0f1018', border: '1px solid rgba(255,255,255,.07)', borderRadius: 9, padding: '9px 13px', color: '#fff', fontSize: 13, outline: 'none' }}
+
+              {/* Code share */}
+              <button style={S.iconBtn2} onClick={() => setShowCodeModal(true)} aria-label="Share code">
+                <Code2 size={18}/>
+              </button>
+
+              {/* Camera capture */}
+              <button
+                style={S.iconBtn2}
+                aria-label="Take photo"
+                onClick={() => camInputRef.current?.click()}
+                title="Take photo"
+              >
+                <Camera size={17}/>
+              </button>
+
+              {/* Gallery / image picker */}
+              <button
+                style={S.iconBtn2}
+                aria-label="Send image"
+                onClick={() => imgInputRef.current?.click()}
+                title="Send image"
+              >
+                <ImageIcon size={17}/>
+              </button>
+
+              {/* Any file */}
+              <button
+                style={S.iconBtn2}
+                aria-label="Attach file"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach file"
+              >
+                <Paperclip size={17}/>
+              </button>
+
+              {/* Hidden inputs — separate refs so accept never conflicts */}
+              <input
+                ref={camInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+                onChange={handleCameraInput}
               />
-              <button onClick={sendCode} disabled={!codeInput.trim()}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: codeInput.trim() ? '#3b82f6' : '#111', border: 'none', borderRadius: 9, padding: '9px 18px', color: codeInput.trim() ? '#fff' : '#333', fontSize: 13, fontWeight: 700, cursor: codeInput.trim() ? 'pointer' : 'not-allowed' }}>
-                <Send size={13} /> Send Code
+              <input
+                ref={imgInputRef}
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                onChange={handleImageInput}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="*/*"
+                hidden
+                onChange={handleFileInput}
+              />
+
+              {/* Upload progress indicator */}
+              {uploading && (
+                <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'#3b82f6', flexShrink:0 }}>
+                  <div style={{ width:6, height:6, borderRadius:'50%', background:'#3b82f6', animation:'pulse 1s ease-in-out infinite' }}/>
+                  Uploading…
+                </div>
+              )}
+
+              {/* Textarea */}
+              <textarea
+                ref={textareaRef}
+                className="chat-ta"
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value)
+                  e.target.style.height='auto'
+                  e.target.style.height=Math.min(e.target.scrollHeight,120)+'px'
+                  emitTyping()
+                }}
+                onKeyDown={e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                placeholder="Message…"
+                rows={1}
+                style={S.textarea}
+              />
+
+              {/* Send */}
+              <button
+                className="send-btn"
+                onClick={sendMessage}
+                disabled={!input.trim()||sending}
+                style={{ ...S.sendBtn, ...(!input.trim()||sending ? S.sendOff:{}) }}
+              >
+                <Send size={14}/>
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </footer>
+        )}
+      </div>
     </>
   )
 }
+
+// ─────────────────────────────────────────────
+//  Styles
+// ─────────────────────────────────────────────
+const S = {
+  fullCenter: { height:'100dvh', display:'flex', flexDirection:'column' as const, alignItems:'center', justifyContent:'center', background:'#000', gap:12 },
+  root: {
+    display:'flex', flexDirection:'column' as const,
+    height:'100dvh', background:'#000',
+    color:'#d4d4d8', overflow:'hidden',
+    fontFamily:"'SF Pro Text',-apple-system,BlinkMacSystemFont,sans-serif",
+    position:'relative' as const,
+  },
+  header: {
+    display:'flex', alignItems:'center', gap:12,
+    padding:'10px 14px',
+    background:'rgba(4,4,4,0.97)', backdropFilter:'blur(20px)',
+    borderBottom:'1px solid #0f0f0f',
+    flexShrink:0, zIndex:20,
+  },
+  avatar: { width:40, height:40, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:15, color:'#fff' },
+  onlineDot: { position:'absolute' as const, bottom:-1, right:-1, width:11, height:11, borderRadius:'50%', background:'#22c55e', border:'2px solid #000', boxShadow:'0 0 8px rgba(34,197,94,0.5)' },
+  headerName: { fontSize:15, fontWeight:600, color:'#e4e4e7', whiteSpace:'nowrap' as const, overflow:'hidden', textOverflow:'ellipsis' },
+
+  iconBtn2: { width:34, height:34, borderRadius:'50%', background:'none', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'#444', flexShrink:0, transition:'color 0.15s' },
+
+  moreMenu: { position:'absolute' as const, top:'110%', right:0, background:'#0a0a0a', borderWidth:1, borderStyle:'solid', borderColor:'#1a1a1a', borderRadius:12, padding:4, boxShadow:'0 8px 32px rgba(0,0,0,0.8)', zIndex:100, minWidth:170 },
+  moreItem: { width:'100%', display:'flex', alignItems:'center', gap:10, padding:'9px 12px', background:'transparent', border:'none', cursor:'pointer', color:'#888', borderRadius:8, transition:'background 0.15s' },
+
+  pinnedBanner: { display:'flex', alignItems:'center', gap:8, padding:'6px 16px', background:'#060606', borderBottom:'1px solid #0f0f0f', cursor:'pointer', flexShrink:0 },
+  searchOverlay: { position:'absolute' as const, inset:0, background:'rgba(0,0,0,0.97)', backdropFilter:'blur(20px)', zIndex:40, display:'flex', flexDirection:'column' as const },
+  searchHit: { width:'100%', padding:'10px 16px', background:'transparent', border:'none', borderBottom:'1px solid #0d0d0d', cursor:'pointer', transition:'background 0.15s' },
+
+  messages: { flex:1, overflowY:'auto' as const, padding:'14px 10px 8px', display:'flex', flexDirection:'column' as const },
+  msgAv: { width:28, height:28, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', flexShrink:0 },
+
+  bubble: { padding:'9px 13px', borderRadius:18, wordBreak:'break-word' as const, transition:'background 0.4s' },
+  bubbleMine:   { background:'#0c1628', borderWidth:1, borderStyle:'solid', borderColor:'#162040', color:'#c8d8f8', boxShadow:'0 2px 10px rgba(29,78,216,0.10)' },
+  bubbleTheirs: { background:'#0c0c0c', borderWidth:1, borderStyle:'solid', borderColor:'#141414', color:'#b4b4b8' },
+
+  actBtn: { width:26, height:26, borderRadius:7, borderWidth:1, borderStyle:'solid', borderColor:'#141414', background:'#080808', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'#333', transition:'all 0.15s' },
+
+  reactionBar: { display:'flex', flexWrap:'wrap' as const, gap:4, marginTop:4, position:'relative' as const },
+  addReactBtn: { width:22, height:22, borderRadius:6, borderWidth:1, borderStyle:'solid', borderColor:'#161616', background:'transparent', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'#444', transition:'all 0.15s' },
+  quickPicker: { position:'absolute' as const, bottom:'110%', left:0, display:'flex', flexWrap:'wrap' as const, gap:3, padding:8, borderRadius:12, background:'#0c0c0c', borderWidth:1, borderStyle:'solid', borderColor:'#181818', boxShadow:'0 8px 32px rgba(0,0,0,0.7)', zIndex:50 },
+  qpItem: { fontSize:17, background:'none', border:'none', cursor:'pointer', padding:3, borderRadius:6, transition:'transform 0.1s' },
+  chip: { display:'flex', alignItems:'center', padding:'2px 6px', borderRadius:20, borderWidth:1, borderStyle:'solid', borderColor:'#181818', background:'#0c0c0c', cursor:'pointer', fontSize:13, color:'#ccc', transition:'all 0.15s' },
+  chipMine: { borderColor:'#1e3a8a', background:'#0c1628' },
+
+  inReply: { display:'flex', gap:8, padding:'5px 8px', borderRadius:8, background:'rgba(255,255,255,0.03)', marginBottom:6 },
+  inReplyBar: { width:3, borderRadius:2, background:'#1d4ed8', flexShrink:0 },
+
+  replyStrip: { display:'flex', alignItems:'center', gap:8, padding:'7px 12px', background:'#060606', borderTop:'1px solid #0f0f0f' },
+  closeBtn: { background:'none', border:'none', cursor:'pointer', color:'#555', display:'flex' },
+
+  typingRow:    { display:'flex', alignItems:'flex-end', gap:6, marginTop:6 },
+  typingBubble: { display:'flex', alignItems:'center', gap:8, padding:'7px 12px', borderRadius:16, background:'#0c0c0c', borderWidth:1, borderStyle:'solid', borderColor:'#141414' },
+  dot: { display:'inline-block', width:5, height:5, borderRadius:'50%', background:'#2a2a2a', animation:'typingBounce 1.2s ease-in-out infinite' },
+
+  scrollFab: { position:'absolute' as const, bottom:88, right:14, width:34, height:34, borderRadius:'50%', background:'#0c0c0c', borderWidth:1, borderStyle:'solid', borderColor:'#1c1c1c', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'#555', boxShadow:'0 4px 20px rgba(0,0,0,0.6)', zIndex:15, transition:'all 0.2s' },
+
+  footer: { background:'rgba(3,3,3,0.97)', backdropFilter:'blur(20px)', borderTop:'1px solid #0c0c0c', flexShrink:0, zIndex:20 },
+  textarea: { flex:1, background:'#080808', borderWidth:1, borderStyle:'solid', borderColor:'#161616', borderRadius:14, padding:'9px 13px', fontSize:14, lineHeight:1.5, color:'#d4d4d8', resize:'none' as const, outline:'none', fontFamily:'inherit', maxHeight:120, transition:'border-color 0.2s, box-shadow 0.2s' },
+  sendBtn: { width:38, height:38, borderRadius:12, background:'linear-gradient(135deg,#1d4ed8,#4338ca)', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'#fff', flexShrink:0, boxShadow:'0 4px 14px rgba(29,78,216,0.25)', transition:'all 0.15s' },
+  sendOff: { background:'#0c0c0c', boxShadow:'none', cursor:'not-allowed', opacity:0.35 },
+  emojiBtn: { fontSize:22, padding:'4px 6px', background:'none', border:'none', cursor:'pointer', borderRadius:8, transition:'transform 0.1s' },
+
+  // Code block
+  codeBlock: { borderRadius:10, overflow:'hidden', marginBottom:6, borderWidth:1, borderStyle:'solid' },
+  codeHeader: { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background:'rgba(0,0,0,0.4)' },
+  codePre: { padding:'10px 12px', overflowX:'auto' as const, maxHeight:240, background:'rgba(0,0,0,0.3)', margin:0 },
+  copyBtn: { background:'none', border:'none', cursor:'pointer', color:'#555', display:'flex', transition:'color 0.15s' },
+
+  // Code modal
+  modalBackdrop: { position:'fixed' as const, inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 },
+  modal: { background:'#0c0c0c', borderWidth:1, borderStyle:'solid', borderColor:'#1a1a1a', borderRadius:16, padding:20, width:'100%', maxWidth:500, boxShadow:'0 20px 60px rgba(0,0,0,0.8)' },
+  codeTA: { width:'100%', minHeight:180, background:'#070707', borderWidth:1, borderStyle:'solid', borderColor:'#1a1a1a', borderRadius:10, padding:'10px 12px', fontSize:13, color:'#c8d8f8', fontFamily:"'Fira Code',monospace", resize:'vertical' as const, outline:'none', lineHeight:1.6 },
+  cancelBtn: { padding:'8px 16px', borderRadius:9, background:'transparent', borderWidth:1, borderStyle:'solid', borderColor:'#1a1a1a', color:'#555', cursor:'pointer', fontSize:13 },
+  primaryBtn: { padding:'8px 18px', borderRadius:9, background:'linear-gradient(135deg,#1d4ed8,#4338ca)', border:'none', color:'#fff', cursor:'pointer', fontSize:13, fontWeight:600 },
+  deleteForAllBtn: { padding:'11px', borderRadius:10, background:'#1c0a0a', borderWidth:1, borderStyle:'solid', borderColor:'#3a1010', color:'#ef4444', cursor:'pointer', fontSize:14, fontWeight:600, textAlign:'center' as const },
+  deleteForMeBtn:  { padding:'11px', borderRadius:10, background:'#0c0c0c', borderWidth:1, borderStyle:'solid', borderColor:'#1a1a1a', color:'#888', cursor:'pointer', fontSize:13, textAlign:'center' as const },
+} as const

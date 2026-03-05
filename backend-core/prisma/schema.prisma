@@ -13,6 +13,11 @@ model User {
   email             String    @unique
   passwordHash      String
   profilePic        String?
+  bio               String?
+  githubUrl         String?
+  linkedinUrl       String?
+  portfolioUrl      String?
+  skills            String[]  @default([])
   targetTrack       String
   level             String
   mode              String    @default("normal")
@@ -47,6 +52,11 @@ model User {
   leaderboardHistory    LeaderboardHistory[]
   globalLeaderboard     GlobalLeaderboard?
   taskResults           TaskResult[]
+  posts                 Post[]
+  postLikes             PostLike[]
+  postComments          PostComment[]
+  highlights            Highlight[]
+  scheduledTestAttempts ScheduledTestAttempt[]
 
   // Direct messaging relations
   conversationsAsUser1  Conversation[]  @relation("ConvUser1")
@@ -397,7 +407,6 @@ model DirectMessage {
   @@index([senderId])
 }
 
-// ── SIGMA AI Challenge Results ────────────────────────────────────
 model TaskResult {
   id               String   @id @default(uuid())
   userId           String
@@ -413,4 +422,80 @@ model TaskResult {
 
   @@index([userId])
   @@index([completedAt])
+}
+
+model Post {
+  id        String      @id @default(cuid())
+  userId    String
+  content   String
+  imageUrl  String?
+  videoUrl  String?
+  createdAt DateTime  @default(now())
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes    PostLike[]
+  comments PostComment[]
+
+  @@index([userId])
+}
+
+model PostLike {
+  id     String @id @default(cuid())
+  userId String
+  postId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model Highlight {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  link        String
+  description String   @default("")
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ScheduledTestAttempt {
+  id             String   @id @default(uuid())
+  userId         String
+  testKey        String
+  testType       String
+  label          String
+  score          Int
+  passed         Boolean
+  correct        Int
+  totalQuestions Int
+  timeTaken      Int      @default(0)
+  results        String
+  verdict        String
+  xpEarned       Int      @default(0)
+  completedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, testKey])
+  @@index([userId, completedAt])
+  @@index([testKey])
 }

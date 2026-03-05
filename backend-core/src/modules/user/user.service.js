@@ -1,360 +1,415 @@
 const { prisma } = require('../../core/database/prismaClient');
-const { getCache, setCache, deleteCache } = require('../../core/cache/cacheManager');
+const cloudinary  = require('cloudinary').v2;
 
-// ── Get Dashboard ─────────────────────────────
-async function getDashboard(userId) {
-  const cacheKey = `dashboard:${userId}`;
-  const cached = await getCache(cacheKey);
-  if (cached) return cached;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      profilePic: true,
-      targetTrack: true,
-      level: true,
-      mode: true,
-      tier: true,
-      masteryPercent: true,
-      realityScore: true,
-      streakCurrent: true,
-      streakLongest: true,
-      trackRank: true,
-      trackRankTotal: true,
-      platformRank: true,
-      platformRankTotal: true,
-      createdAt: true,
-      batchMember: {
-        select: {
-          rank: true,
-          performanceScore: true,
-          batch: {
-            select: {
-              id: true,
-              batchCode: true,
-              targetTrack: true,
-              level: true,
-              _count: { select: { members: true } },
-            },
-          },
-        },
-      },
-      globalLeaderboard: {
-        select: {
-          trackRank: true,
-          trackRankTotal: true,
-          platformRank: true,
-          platformRankTotal: true,
-          weeklyMovement: true,
-          performanceScore: true,
-        },
-      },
-      tasks: {
-        select: { status: true },
-      },
-      testResults: {
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: {
-          score: true,
-          passed: true,
-          difficulty: true,
-          createdAt: true,
-        },
-      },
-      realityScores: {
-        orderBy: { updatedAt: 'desc' },
-        take: 1,
-        select: {
-          score: true,
-          industryGap: true,
-          interviewScore: true,
-          codeQualityScore: true,
-          speedScore: true,
-          consistencyScore: true,
-        },
-      },
-    },
+if (process.env.CLOUDINARY_CLOUD_NAME) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key:    process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
   });
-
-  if (!user) throw { status: 404, message: 'User not found' };
-
-  // Calculate task stats
-  const totalTasks = user.tasks.length;
-  const completedTasks = user.tasks.filter(t => t.status === 'completed').length;
-  const taskCompletionRate = totalTasks > 0
-    ? Math.round((completedTasks / totalTasks) * 100)
-    : 0;
-
-  // Batch info
-  const batchRank = user.batchMember?.rank || 0;
-  const batchTotal = user.batchMember?.batch?._count?.members || 0;
-  const batchCode = user.batchMember?.batch?.batchCode || null;
-  const batchId = user.batchMember?.batch?.id || null;
-  const performanceScore = user.batchMember?.performanceScore || 0;
-
-  // Global rank
-  const global = user.globalLeaderboard;
-
-  const dashboard = {
-    profile: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      profilePic: user.profilePic,
-      targetTrack: user.targetTrack,
-      level: user.level,
-      mode: user.mode,
-      tier: user.tier,
-      createdAt: user.createdAt,
-    },
-    performance: {
-      masteryPercent: user.masteryPercent,
-      realityScore: user.realityScore,
-      performanceScore,
-      taskCompletionRate,
-      totalTasks,
-      completedTasks,
-      streakCurrent: user.streakCurrent,
-      streakLongest: user.streakLongest,
-    },
-    ranks: {
-      batchRank,
-      batchTotal,
-      batchCode,
-      batchId,
-      trackRank: global?.trackRank || user.trackRank || 0,
-      trackRankTotal: global?.trackRankTotal || user.trackRankTotal || 0,
-      platformRank: global?.platformRank || user.platformRank || 0,
-      platformRankTotal: global?.platformRankTotal || user.platformRankTotal || 0,
-      weeklyMovement: global?.weeklyMovement || 0,
-    },
-    recentTests: user.testResults,
-    realityScore: user.realityScores[0] || null,
-  };
-
-  await setCache(cacheKey, dashboard, 120); // cache 2 min
-  return dashboard;
 }
 
-// ── Get Profile ───────────────────────────────
+// ── Upload helper ─────────────────────────────────────────────────
+async function uploadToCloudinary(buffer, folder = 'profiles', resourceType = 'auto') {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: resourceType, transformation: [{ quality: 'auto', fetch_format: 'auto' }] },
+      (err, result) => { if (err) reject(err); else resolve(result.secure_url); },
+    );
+    stream.end(buffer);
+  });
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+function formatUser(u) {
+  return {
+    id:               u.id,
+    username:         u.username,
+    email:            u.email,
+    profilePic:       u.profilePic,
+    bio:              u.bio,
+    githubUrl:        u.githubUrl,
+    linkedinUrl:      u.linkedinUrl,
+    portfolioUrl:     u.portfolioUrl,
+    skills:           u.skills || [],
+    targetTrack:      u.targetTrack,
+    level:            u.level,
+    mode:             u.mode,
+    tier:             u.tier,
+    xp:               u.xp,
+    masteryPercent:   u.masteryPercent,
+    realityScore:     u.realityScore,
+    streakCurrent:    u.streakCurrent,
+    streakLongest:    u.streakLongest,
+    trackRank:        u.trackRank,
+    trackRankTotal:   u.trackRankTotal,
+    platformRank:     u.platformRank,
+    platformRankTotal:u.platformRankTotal,
+    createdAt:        u.createdAt,
+    _count:           u._count,
+  };
+}
+
+function formatPosts(posts, viewerId) {
+  return (posts || []).map(p => ({
+    id:        p.id,
+    content:   p.content,
+    imageUrl:  p.imageUrl  || null,
+    videoUrl:  p.videoUrl  || null,
+    createdAt: p.createdAt,
+    likes:     p._count?.likes    || 0,
+    comments:  p._count?.comments || 0,
+    liked:     Array.isArray(p.likes) ? p.likes.length > 0 : false,
+    user: p.user
+      ? { username: p.user.username, profilePic: p.user.profilePic || null, tier: p.user.tier }
+      : null,
+  }));
+}
+
+function postSelect(viewerId) {
+  return {
+    id: true, content: true, imageUrl: true, videoUrl: true, createdAt: true,
+    user: { select: { username: true, profilePic: true, tier: true } },
+    _count: { select: { likes: true, comments: true } },
+    likes:  { where: { userId: viewerId }, select: { id: true } },
+  };
+}
+
+// ── Own profile ────────────────────────────────────────────────────
 async function getProfile(userId) {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where:  { id: userId },
     select: {
-      id: true,
-      username: true,
-      email: true,
-      profilePic: true,
-      targetTrack: true,
-      level: true,
-      mode: true,
-      tier: true,
-      masteryPercent: true,
-      realityScore: true,
-      streakCurrent: true,
-      streakLongest: true,
-      trackRank: true,
-      trackRankTotal: true,
-      platformRank: true,
-      platformRankTotal: true,
-      createdAt: true,
-      batchMember: {
-        select: {
-          rank: true,
-          performanceScore: true,
-          batch: { select: { batchCode: true } },
-        },
+      id: true, username: true, email: true, profilePic: true,
+      bio: true, githubUrl: true, linkedinUrl: true, portfolioUrl: true,
+      skills: true, targetTrack: true, level: true, mode: true, tier: true,
+      xp: true, masteryPercent: true, realityScore: true,
+      streakCurrent: true, streakLongest: true,
+      trackRank: true, trackRankTotal: true,
+      platformRank: true, platformRankTotal: true, createdAt: true,
+      _count: { select: { tasks: true, testResults: true } },
+      posts: {
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: postSelect(userId),
       },
-      globalLeaderboard: true,
-      _count: {
-        select: {
-          tasks: true,
-          testResults: true,
-          connectionsAsSender: true,
-        },
+      highlights: {
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, title: true, imageUrl: true, link: true, description: true, createdAt: true },
       },
     },
   });
 
-  if (!user) throw { status: 404, message: 'User not found' };
-  return user;
+  if (!user) throw new Error('User not found');
+
+  return {
+    ...formatUser(user),
+    posts:      formatPosts(user.posts, userId),
+    highlights: user.highlights || [],
+  };
 }
 
-// ── Get Public Profile ────────────────────────
-async function getPublicProfile(username) {
-  const cacheKey = `public_profile:${username}`;
-  const cached = await getCache(cacheKey);
-  if (cached) return cached;
+async function updateProfile(userId, fields) {
+  const allowed = {};
+  if (fields.bio          !== undefined) allowed.bio          = fields.bio;
+  if (fields.githubUrl    !== undefined) allowed.githubUrl    = fields.githubUrl;
+  if (fields.linkedinUrl  !== undefined) allowed.linkedinUrl  = fields.linkedinUrl;
+  if (fields.portfolioUrl !== undefined) allowed.portfolioUrl = fields.portfolioUrl;
+  if (Array.isArray(fields.skills))      allowed.skills       = fields.skills;
 
+  const user = await prisma.user.update({ where: { id: userId }, data: allowed });
+  return formatUser(user);
+}
+
+async function updateProfilePic(userId, file) {
+  let profilePic;
+  if (process.env.CLOUDINARY_CLOUD_NAME) {
+    profilePic = await uploadToCloudinary(file.buffer, 'profile_pics', 'image');
+  } else {
+    profilePic = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+  }
+  await prisma.user.update({ where: { id: userId }, data: { profilePic } });
+  return { profilePic };
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────
+async function getDashboard(userId) {
   const user = await prisma.user.findUnique({
-    where: { username },
+    where:  { id: userId },
     select: {
-      id: true,
-      username: true,
-      profilePic: true,
-      targetTrack: true,
-      level: true,
-      tier: true,
-      masteryPercent: true,
-      realityScore: true,
-      streakCurrent: true,
-      streakLongest: true,
-      trackRank: true,
-      trackRankTotal: true,
-      platformRank: true,
-      platformRankTotal: true,
-      createdAt: true,
-      batchMember: {
-        select: {
-          rank: true,
-          batch: { select: { batchCode: true } },
-        },
+      id: true, username: true, profilePic: true, tier: true,
+      targetTrack: true, level: true, mode: true, bio: true,
+      masteryPercent: true, realityScore: true,
+      streakCurrent: true, streakLongest: true, xp: true,
+      batchMember: { select: { batchId: true, rank: true, batch: { select: { batchCode: true } } } },
+      globalLeaderboard: true,
+      _count: { select: { tasks: { where: { status: 'completed' } } } },
+    },
+  });
+
+  const totalTasks  = await prisma.task.count({ where: { userId } });
+  const recentTests = await prisma.taskResult.findMany({
+    where:   { userId },
+    orderBy: { completedAt: 'desc' },
+    take:    20,
+    select:  { id: true, score: true, xpEarned: true, timeTakenSeconds: true, difficulty: true, completedAt: true, challengeTitle: true },
+  });
+
+  return {
+    profile: {
+      username:    user.username,
+      profilePic:  user.profilePic,
+      tier:        user.tier,
+      targetTrack: user.targetTrack,
+      level:       user.level,
+      mode:        user.mode,
+      bio:         user.bio,
+    },
+    performance: {
+      masteryPercent:  user.masteryPercent,
+      realityScore:    user.realityScore,
+      streakCurrent:   user.streakCurrent,
+      streakLongest:   user.streakLongest,
+      xp:              user.xp,
+      completedTasks:  user._count.tasks,
+      totalTasks,
+    },
+    ranks: {
+      batchRank:          user.batchMember?.rank,
+      batchTotal:         user.batchMember ? 100 : null,
+      batchCode:          user.batchMember?.batch?.batchCode,
+      trackRank:          user.globalLeaderboard?.trackRank,
+      trackRankTotal:     user.globalLeaderboard?.trackRankTotal,
+      platformRank:       user.globalLeaderboard?.platformRank,
+      platformRankTotal:  user.globalLeaderboard?.platformRankTotal,
+      weeklyMovement:     user.globalLeaderboard?.weeklyMovement || 0,
+    },
+    recentTests: recentTests.map(t => ({
+      id:         t.id,
+      score:      t.score,
+      percentage: t.score,
+      passed:     t.score >= 60,
+      difficulty: t.difficulty,
+      date:       t.completedAt,
+      topic:      t.challengeTitle?.replace(/^Test:\s*/, '').trim() || '',
+      xpEarned:   t.xpEarned,
+    })),
+  };
+}
+
+// ── Public profile ─────────────────────────────────────────────────
+async function getPublicProfile(username, viewerId) {
+  const user = await prisma.user.findFirst({
+    where:  { username },
+    select: {
+      id: true, username: true, profilePic: true, bio: true,
+      githubUrl: true, linkedinUrl: true, portfolioUrl: true, skills: true,
+      targetTrack: true, level: true, mode: true, tier: true,
+      xp: true, masteryPercent: true, realityScore: true,
+      streakCurrent: true, streakLongest: true,
+      trackRank: true, trackRankTotal: true,
+      platformRank: true, platformRankTotal: true, createdAt: true,
+      _count: { select: { tasks: true, testResults: true } },
+      posts: {
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: postSelect(viewerId),
       },
-      globalLeaderboard: {
-        select: {
-          trackRank: true,
-          trackRankTotal: true,
-          platformRank: true,
-          platformRankTotal: true,
-          weeklyMovement: true,
-        },
-      },
-      _count: {
-        select: { tasks: true, testResults: true },
+      highlights: {
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, title: true, imageUrl: true, link: true, description: true },
       },
     },
   });
 
-  if (!user) throw { status: 404, message: 'User not found' };
+  if (!user) throw new Error('User not found');
 
-  await setCache(cacheKey, user, 300);
-  return user;
-}
-
-// ── Update Profile ────────────────────────────
-async function updateProfile(userId, data) {
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data,
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      profilePic: true,
-      mode: true,
-      tier: true,
-      targetTrack: true,
-      level: true,
-    },
-  });
-
-  await deleteCache(`dashboard:${userId}`);
-  await deleteCache(`public_profile:${updated.username}`);
-  return updated;
-}
-
-// ── Search Users ──────────────────────────────
-async function searchUsers(query, currentUserId) {
-  const users = await prisma.user.findMany({
+  const connection = viewerId ? await prisma.connection.findFirst({
     where: {
-      AND: [
-        { id: { not: currentUserId } },
-        {
-          OR: [
-            { username: { contains: query, mode: 'insensitive' } },
-            { email: { contains: query, mode: 'insensitive' } },
-          ],
-        },
+      OR: [
+        { senderId: viewerId, receiverId: user.id },
+        { senderId: user.id, receiverId: viewerId },
+      ],
+    },
+  }) : null;
+
+  let connectionStatus = 'none';
+  if (connection) {
+    if (connection.status === 'accepted') connectionStatus = 'accepted';
+    else if (connection.senderId === viewerId) connectionStatus = 'pending_sent';
+    else connectionStatus = 'pending_received';
+  }
+
+  const isConnected = connectionStatus === 'accepted';
+
+  return {
+    ...formatUser(user),
+    connectionStatus,
+    connectionId: connection?.id || null,
+    posts:      isConnected || user.id === viewerId ? formatPosts(user.posts, viewerId) : [],
+    highlights: user.highlights || [],
+  };
+}
+
+// ✅ NEW: Get friends list for a public username
+async function getUserFriends(username) {
+  const user = await prisma.user.findFirst({
+    where: { username },
+    select: { id: true },
+  });
+
+  if (!user) throw new Error('User not found');
+
+  const connections = await prisma.connection.findMany({
+    where: {
+      OR: [
+        { senderId: user.id, status: 'accepted' },
+        { receiverId: user.id, status: 'accepted' },
       ],
     },
     select: {
-      id: true,
-      username: true,
-      profilePic: true,
-      targetTrack: true,
-      level: true,
-      tier: true,
-      trackRank: true,
-      platformRank: true,
-      masteryPercent: true,
-      batchMember: {
-        select: { rank: true, batch: { select: { batchCode: true } } },
-      },
+      sender:   { select: { id: true, username: true, tier: true, targetTrack: true, profilePic: true } },
+      receiver: { select: { id: true, username: true, tier: true, targetTrack: true, profilePic: true } },
+      senderId: true,
     },
-    take: 20,
   });
 
-  return users;
+  // Return the "other" person in each connection
+  return connections.map(c =>
+    c.senderId === user.id ? c.receiver : c.sender
+  );
 }
 
-// ── Compare Users ─────────────────────────────
-async function compareUsers(userId, targetUserId) {
-  const [me, target] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        username: true,
-        profilePic: true,
-        targetTrack: true,
-        tier: true,
-        masteryPercent: true,
-        realityScore: true,
-        streakCurrent: true,
-        trackRank: true,
-        platformRank: true,
-        batchMember: { select: { rank: true, performanceScore: true } },
-        globalLeaderboard: { select: { trackRank: true, platformRank: true, weeklyMovement: true } },
-      },
-    }),
-    prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: {
-        id: true,
-        username: true,
-        profilePic: true,
-        targetTrack: true,
-        tier: true,
-        masteryPercent: true,
-        realityScore: true,
-        streakCurrent: true,
-        trackRank: true,
-        platformRank: true,
-        batchMember: { select: { rank: true, performanceScore: true } },
-        globalLeaderboard: { select: { trackRank: true, platformRank: true, weeklyMovement: true } },
-      },
-    }),
-  ]);
+// ── Posts ──────────────────────────────────────────────────────────
+async function getPosts(ownerId, viewerId) {
+  const posts = await prisma.post.findMany({
+    where:   { userId: ownerId },
+    orderBy: { createdAt: 'desc' },
+    take:    30,
+    select:  postSelect(viewerId),
+  });
+  return formatPosts(posts, viewerId);
+}
 
-  if (!target) throw { status: 404, message: 'User not found' };
+async function createPost(userId, content, file) {
+  let imageUrl = null;
+  let videoUrl = null;
+
+  if (file && process.env.CLOUDINARY_CLOUD_NAME) {
+    const isVideo = file.mimetype.startsWith('video/');
+    const url = await uploadToCloudinary(file.buffer, 'reality-engine/posts', isVideo ? 'video' : 'image');
+    if (isVideo) videoUrl = url;
+    else imageUrl = url;
+  } else if (file) {
+    const b64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    if (file.mimetype.startsWith('video/')) videoUrl = b64;
+    else imageUrl = b64;
+  }
+
+  const post = await prisma.post.create({
+    data:    { userId, content: content || '', imageUrl, videoUrl },
+    include: { user: { select: { username: true, profilePic: true, tier: true } } },
+  });
 
   return {
-    you: me,
-    rival: target,
-    comparison: {
-      masteryDiff: (me.masteryPercent - target.masteryPercent).toFixed(1),
-      realityScoreDiff: (me.realityScore - target.realityScore).toFixed(1),
-      streakDiff: me.streakCurrent - target.streakCurrent,
-      platformRankDiff: target.platformRank - me.platformRank,
-      trackRankDiff: target.trackRank - me.trackRank,
-      performanceDiff: (
-        (me.batchMember?.performanceScore || 0) -
-        (target.batchMember?.performanceScore || 0)
-      ).toFixed(1),
-      winner: me.masteryPercent >= target.masteryPercent ? me.username : target.username,
-    },
+    id:        post.id,
+    content:   post.content,
+    imageUrl:  post.imageUrl,
+    videoUrl:  post.videoUrl,
+    createdAt: post.createdAt,
+    likes:     0,
+    comments:  0,
+    liked:     false,
+    user: { username: post.user.username, profilePic: post.user.profilePic, tier: post.user.tier },
   };
 }
 
+async function deletePost(userId, postId) {
+  const post = await prisma.post.findFirst({ where: { id: postId, userId } });
+  if (!post) throw Object.assign(new Error('Post not found'), { status: 404 });
+  await prisma.post.delete({ where: { id: postId } });
+}
+
+async function likePost(userId, postId) {
+  const existing = await prisma.postLike.findFirst({ where: { userId, postId } });
+  if (existing) {
+    await prisma.postLike.delete({ where: { id: existing.id } });
+    return { liked: false };
+  }
+  await prisma.postLike.create({ data: { userId, postId } });
+  return { liked: true };
+}
+
+async function addComment(userId, postId, content) {
+  const comment = await prisma.postComment.create({
+    data:    { userId, postId, content },
+    include: { user: { select: { username: true, profilePic: true, tier: true } } },
+  });
+  return {
+    id:        comment.id,
+    content:   comment.content,
+    createdAt: comment.createdAt,
+    user: { username: comment.user.username, profilePic: comment.user.profilePic, tier: comment.user.tier },
+  };
+}
+
+async function getComments(postId) {
+  const comments = await prisma.postComment.findMany({
+    where:   { postId },
+    orderBy: { createdAt: 'asc' },
+    take:    50,
+    include: { user: { select: { username: true, profilePic: true, tier: true } } },
+  });
+  return comments.map(c => ({
+    id:        c.id,
+    content:   c.content,
+    createdAt: c.createdAt,
+    user: { username: c.user.username, profilePic: c.user.profilePic, tier: c.user.tier },
+  }));
+}
+
+// ── Highlights ─────────────────────────────────────────────────────
+async function createHighlight(userId, { title, link, description }, file) {
+  let imageUrl = null;
+  if (file && process.env.CLOUDINARY_CLOUD_NAME) {
+    imageUrl = await uploadToCloudinary(file.buffer, 'reality-engine/highlights', 'image');
+  } else if (file) {
+    imageUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+  }
+  return prisma.highlight.create({
+    data:   { userId, title, link, description: description || '', imageUrl },
+    select: { id: true, title: true, link: true, description: true, imageUrl: true, createdAt: true },
+  });
+}
+
+async function getHighlights(userId) {
+  return prisma.highlight.findMany({
+    where:   { userId },
+    orderBy: { createdAt: 'desc' },
+    select:  { id: true, title: true, link: true, description: true, imageUrl: true, createdAt: true },
+  });
+}
+
+async function deleteHighlight(userId, highlightId) {
+  const hl = await prisma.highlight.findFirst({ where: { id: highlightId, userId } });
+  if (!hl) throw Object.assign(new Error('Highlight not found'), { status: 404 });
+  await prisma.highlight.delete({ where: { id: highlightId } });
+}
+
 module.exports = {
-  getDashboard,
   getProfile,
-  getPublicProfile,
   updateProfile,
-  searchUsers,
-  compareUsers,
+  updateProfilePic,
+  getDashboard,
+  getPublicProfile,
+  getUserFriends,       // ✅ NEW
+  getPosts,
+  createPost,
+  deletePost,
+  likePost,
+  addComment,
+  getComments,
+  createHighlight,
+  getHighlights,
+  deleteHighlight,
 };

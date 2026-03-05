@@ -14,11 +14,17 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    if (err.response?.status === 401) {
+    const url = err.config?.url || '';
+
+    // ── Never redirect on auth routes themselves ──────────────────
+    const isAuthRoute = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/verify-otp', '/auth/reset-password'].some(p => url.includes(p));
+
+    if (err.response?.status === 401 && !isAuthRoute) {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       window.location.href = '/login';
     }
+
     return Promise.reject(err);
   }
 );

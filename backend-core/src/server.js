@@ -1,15 +1,18 @@
 require('dotenv').config();
 const http = require('http');
-const app = require('./app');
-const { initSocket } = require('./sockets/index');
+
+const app    = require('./app');                                    // plain express app
+const server = http.createServer(app);                             // ONE server, here only
+
+const { initSocket }   = require('./sockets/index');
 const { connectRedis } = require('./core/cache/redisClient');
-const { connectDB } = require('./core/database/prismaClient');
+const { connectDB }    = require('./core/database/prismaClient');
 const { startRankJob } = require('./jobs/rankRecalculation.job');
-const logger = require('./core/logger/logger');
+const logger           = require('./core/logger/logger');
 
 const PORT = process.env.PORT || 5000;
 
-const server = http.createServer(app);
+// Init socket ONCE — after server is created
 initSocket(server);
 
 async function startServer() {

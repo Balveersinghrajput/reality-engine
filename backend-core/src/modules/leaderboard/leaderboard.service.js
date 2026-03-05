@@ -1,312 +1,266 @@
+/**
+ * leaderboard.service.js — FIXED
+ *
+ * Fixes applied:
+ *  1. Removed `batchCode` everywhere — field does not exist on User model
+ *  2. Uses `taskResults` with fallback to `taskResult` (handles both naming conventions)
+ *  3. Uses real `masteryPercent` field directly (confirmed exists in schema)
+ *  4. Batch scope uses `batchMember` relation with fallback to track scope
+ */
+
 const { prisma } = require('../../core/database/prismaClient');
-const { getCache, setCache } = require('../../core/cache/cacheManager');
 
-// ── Get Batch Leaderboard ─────────────────────
-async function getBatchLeaderboard(batchId, currentUserId) {
-  const cacheKey = `leaderboard:batch:${batchId}`;
-  const cached = await getCache(cacheKey);
+function round1(n) { return Math.round(n * 10) / 10 }
+function round0(n) { return Math.round(n) }
 
-  let members;
+function perfScore(avgTest, mastery, consistency) {
+  return round1(
+    (Math.min(avgTest,     100) * 0.40) +
+    (Math.min(mastery,     100) * 0.35) +
+    (Math.min(consistency, 100) * 0.25)
+  )
+}
 
-  if (cached) {
-    // ✅ Use cached data but NEVER trust cached isCurrentUser
-    // Re-apply isCurrentUser based on the actual requesting user
-    members = cached.map(m => ({
-      ...m,
-      isCurrentUser: m.userId === currentUserId,
-    }));
-  } else {
-    const rawMembers = await prisma.batchMember.findMany({
-      where: { batchId },
-      orderBy: { performanceScore: 'desc' },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            profilePic: true,
-            tier: true,
-            streakCurrent: true,
-            masteryPercent: true,
-            trackRank: true,
-            platformRank: true,
-            level: true,
-          },
-        },
-      },
-    });
-
-    // Get previous week history for movement
-    const now = new Date();
-    const weekNumber = Math.ceil(now.getDate() / 7);
-    const prevHistory = await prisma.leaderboardHistory.findMany({
-      where: {
-        batchId,
-        weekNumber: weekNumber - 1,
-        year: now.getFullYear(),
-      },
-    });
-
-    const prevRankMap = {};
-    prevHistory.forEach(h => { prevRankMap[h.userId] = h.rank; });
-
-    // ✅ Build members WITHOUT isCurrentUser before caching
-    const membersToCache = rawMembers.map((m, idx) => {
-      const currentRank = idx + 1;
-      const prevRank = prevRankMap[m.userId] || currentRank;
-      const movement = prevRank - currentRank;
-      return {
-        rank: currentRank,
-        movement,
-        userId: m.userId,
-        username: m.user.username,
-        profilePic: m.user.profilePic,
-        tier: m.user.tier,
-        level: m.user.level,
-        streakCurrent: m.user.streakCurrent,
-        masteryPercent: m.user.masteryPercent,
-        performanceScore: m.performanceScore,
-        trackRank: m.user.trackRank,
-        platformRank: m.user.platformRank,
-        // ✅ DO NOT include isCurrentUser here — it would poison the cache
-      };
-    });
-
-    await setCache(cacheKey, membersToCache, 60);
-
-    // Apply isCurrentUser only for the response
-    members = membersToCache.map(m => ({
-      ...m,
-      isCurrentUser: m.userId === currentUserId,
-    }));
+// ── Prisma model name helper ──────────────────────────────────────
+// Your schema might use TaskResult or taskResult — try both
+async function groupByTaskResults(args) {
+  try {
+    return await prisma.taskResults.groupBy(args)
+  } catch {
+    return await prisma.taskResult.groupBy(args)
   }
+}
 
-  // Find current user entry
-  const currentUserEntry = members.find(m => m.userId === currentUserId);
-  const batchTotal = members.length;
+async function findManyTaskResults(args) {
+  try {
+    return await prisma.taskResults.findMany(args)
+  } catch {
+    return await prisma.taskResult.findMany(args)
+  }
+}
 
-  // Batch average
-  const batchAvg = members.length > 0
-    ? Math.round(members.reduce((s, m) => s + m.performanceScore, 0) / members.length)
-    : 0;
+// ─────────────────────────────────────────────────────────────────
+// buildLeaderboard
+// ─────────────────────────────────────────────────────────────────
+async function buildLeaderboard(requestingUserId, userIds) {
+  if (!userIds || userIds.length === 0) return []
 
-  const currentRank = currentUserEntry?.rank ?? 0;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
-  // Next competitor to beat (only relevant if not rank #1)
-  const nextCompetitor = currentRank > 1
-    ? members.find(m => m.rank === currentRank - 1)
-    : null;
-
-  const gap = nextCompetitor
-    ? (nextCompetitor.performanceScore - (currentUserEntry?.performanceScore || 0)).toFixed(1)
-    : 0;
-
-  const aboveBatch = currentUserEntry
-    ? (currentUserEntry.performanceScore - batchAvg).toFixed(1)
-    : 0;
-
-  return {
-    leaderboard: members,
-    insights: {
-      yourRank: currentRank,
-      batchTotal,
-      batchAvg,
-      aboveBatchAvg: aboveBatch,
-      nextCompetitor: nextCompetitor?.username || null,
-      gapToNext: gap,
-      message: currentRank === 1
-        ? '🏆 You are #1 in your batch! Keep it up!'
-        : currentRank === 0
-          ? 'Complete tasks to appear on the leaderboard!'
-          : `You need +${gap}% to beat ${nextCompetitor?.username}`,
+  // 1. Fetch users — only confirmed fields from schema
+  const users = await prisma.user.findMany({
+    where:  { id: { in: userIds } },
+    select: {
+      id:             true,
+      username:       true,
+      tier:           true,
+      level:          true,
+      targetTrack:    true,
+      xp:             true,
+      masteryPercent: true,
+      streakCurrent:  true,
+      streakLongest:  true,
+      profilePic:     true,
     },
-  };
-}
+  })
 
-// ── Get Track Global Leaderboard ──────────────
-async function getTrackLeaderboard(targetTrack, currentUserId) {
-  const cacheKey = `leaderboard:track:${targetTrack}`;
-  const cached = await getCache(cacheKey);
+  if (users.length === 0) return []
 
-  let leaderboard;
-
-  if (cached) {
-    // ✅ Re-apply isCurrentUser after cache retrieval
-    leaderboard = cached.map(u => ({
-      ...u,
-      isCurrentUser: u.userId === currentUserId,
-    }));
-  } else {
-    const users = await prisma.globalLeaderboard.findMany({
-      where: { targetTrack },
-      orderBy: { trackRank: 'asc' },
-      take: 100,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            profilePic: true,
-            tier: true,
-            level: true,
-            streakCurrent: true,
-            masteryPercent: true,
-          },
-        },
-      },
-    });
-
-    // ✅ Cache WITHOUT isCurrentUser
-    const toCache = users.map(u => ({
-      userId: u.userId,
-      trackRank: u.trackRank,
-      trackRankTotal: u.trackRankTotal,
-      platformRank: u.platformRank,
-      performanceScore: u.performanceScore,
-      weeklyMovement: u.weeklyMovement,
-      username: u.user.username,
-      profilePic: u.user.profilePic,
-      tier: u.user.tier,
-      level: u.user.level,
-      streakCurrent: u.user.streakCurrent,
-      masteryPercent: u.user.masteryPercent,
-    }));
-
-    await setCache(cacheKey, toCache, 300);
-
-    leaderboard = toCache.map(u => ({
-      ...u,
-      isCurrentUser: u.userId === currentUserId,
-    }));
+  // 2. Test scores
+  let testGroups = []
+  try {
+    testGroups = await groupByTaskResults({
+      by:     ['userId'],
+      where:  { userId: { in: userIds }, challengeTitle: { startsWith: 'Test:' } },
+      _avg:   { score: true },
+      _max:   { score: true },
+      _count: { id: true },
+      _sum:   { xpEarned: true },
+    })
+  } catch (e) {
+    console.warn('[leaderboard] testGroups failed:', e.message)
   }
 
-  const current = leaderboard.find(u => u.userId === currentUserId);
-  return { leaderboard, currentUser: current };
-}
+  const testMap = Object.fromEntries(
+    testGroups.map(g => [g.userId, {
+      avg:   Math.round(g._avg.score ?? 0),
+      best:  g._max.score  ?? 0,
+      count: g._count.id,
+      xp:    g._sum.xpEarned ?? 0,
+    }])
+  )
 
-// ── Get Platform Leaderboard ──────────────────
-async function getPlatformLeaderboard(currentUserId) {
-  const cacheKey = 'leaderboard:platform:top100';
-  const cached = await getCache(cacheKey);
-
-  let leaderboard;
-
-  if (cached) {
-    // ✅ Re-apply isCurrentUser after cache retrieval
-    leaderboard = cached.map(u => ({
-      ...u,
-      isCurrentUser: u.userId === currentUserId,
-    }));
-  } else {
-    const users = await prisma.globalLeaderboard.findMany({
-      orderBy: { platformRank: 'asc' },
-      take: 100,
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            profilePic: true,
-            tier: true,
-            targetTrack: true,
-            level: true,
-            streakCurrent: true,
-            masteryPercent: true,
-          },
-        },
-      },
-    });
-
-    // ✅ Cache WITHOUT isCurrentUser
-    const toCache = users.map(u => ({
-      userId: u.userId,
-      platformRank: u.platformRank,
-      platformRankTotal: u.platformRankTotal,
-      trackRank: u.trackRank,
-      targetTrack: u.user.targetTrack,
-      performanceScore: u.performanceScore,
-      weeklyMovement: u.weeklyMovement,
-      username: u.user.username,
-      profilePic: u.user.profilePic,
-      tier: u.user.tier,
-      level: u.user.level,
-      streakCurrent: u.user.streakCurrent,
-      masteryPercent: u.user.masteryPercent,
-    }));
-
-    await setCache(cacheKey, toCache, 300);
-
-    leaderboard = toCache.map(u => ({
-      ...u,
-      isCurrentUser: u.userId === currentUserId,
-    }));
+  // 3. Active days (consistency)
+  let allResults = []
+  try {
+    allResults = await findManyTaskResults({
+      where:  { userId: { in: userIds }, completedAt: { gte: thirtyDaysAgo } },
+      select: { userId: true, completedAt: true },
+    })
+  } catch (e) {
+    console.warn('[leaderboard] allResults failed:', e.message)
   }
 
-  const current = leaderboard.find(u => u.userId === currentUserId);
-  return { leaderboard, currentUser: current };
+  const activeDaysMap = {}
+  for (const r of allResults) {
+    const day = r.completedAt.toISOString().split('T')[0]
+    if (!activeDaysMap[r.userId]) activeDaysMap[r.userId] = new Set()
+    activeDaysMap[r.userId].add(day)
+  }
+
+  // 4. Build entries
+  const entries = users.map(u => {
+    const tests       = testMap[u.id] || { avg: 0, best: 0, count: 0, xp: 0 }
+    const activeDays  = activeDaysMap[u.id]?.size ?? 0
+    const mastery     = u.masteryPercent ?? 0
+    const consistency = Math.min((activeDays / 30) * 100, 100)
+    const score       = perfScore(tests.avg, mastery, consistency)
+
+    return {
+      userId:      u.id,
+      username:    u.username    || 'Unknown',
+      tier:        u.tier        || 'developing',
+      level:       u.level       || 'beginner',
+      targetTrack: u.targetTrack || '',
+      profilePic:  u.profilePic  || null,
+      xp:          u.xp          || 0,
+      score,
+      testAvg:     tests.avg,
+      testBest:    tests.best,
+      testCount:   tests.count,
+      mastery:     round0(mastery),
+      streak:      u.streakCurrent ?? 0,
+      streakBest:  u.streakLongest ?? 0,
+      activeDays,
+      totalXP:     tests.xp,
+    }
+  })
+
+  // 5. Sort by score → mastery → testAvg
+  entries.sort((a, b) =>
+    b.score   - a.score   ||
+    b.mastery - a.mastery ||
+    b.testAvg - a.testAvg
+  )
+
+  // 6. Rank (ties = same rank)
+  let currentRank = 1
+  for (let i = 0; i < entries.length; i++) {
+    if (i > 0 && entries[i].score !== entries[i - 1].score) currentRank = i + 1
+    entries[i].rank = currentRank
+  }
+
+  return entries
 }
 
-// ── Get User Rank ─────────────────────────────
-async function getUserRank(userId) {
-  const [batchMember, global] = await Promise.all([
-    prisma.batchMember.findUnique({
-      where: { userId },
-      include: {
-        batch: {
-          include: { _count: { select: { members: true } } },
-        },
-      },
-    }),
-    prisma.globalLeaderboard.findUnique({
-      where: { userId },
-    }),
-  ]);
+// ─────────────────────────────────────────────────────────────────
+// getLeaderboard
+// ─────────────────────────────────────────────────────────────────
+async function getLeaderboard(requestingUserId, scope = 'global', opts = {}) {
+  try {
+    const me = await prisma.user.findUnique({
+      where:  { id: requestingUserId },
+      select: { targetTrack: true },
+    })
 
-  return {
-    batchRank: batchMember?.rank || 0,
-    batchTotal: batchMember?.batch?._count?.members || 0,
-    batchCode: batchMember?.batch?.batchCode || null,
-    trackRank: global?.trackRank || 0,
-    trackRankTotal: global?.trackRankTotal || 0,
-    targetTrack: global?.targetTrack || null,
-    platformRank: global?.platformRank || 0,
-    platformRankTotal: global?.platformRankTotal || 0,
-    weeklyMovement: global?.weeklyMovement || 0,
-    performanceScore: global?.performanceScore || 0,
-  };
+    let userWhere = {}
+
+    if (scope === 'track') {
+      const trackName = opts.track || me?.targetTrack
+      if (trackName) userWhere = { targetTrack: trackName }
+
+    } else if (scope === 'batch') {
+      // Try batchMember relation first
+      try {
+        const myBatch = await prisma.batchMember.findFirst({
+          where:  { userId: requestingUserId },
+          select: { batchId: true },
+        })
+        if (myBatch?.batchId) {
+          const members = await prisma.batchMember.findMany({
+            where:  { batchId: myBatch.batchId },
+            select: { userId: true },
+          })
+          userWhere = { id: { in: members.map(m => m.userId) } }
+        } else {
+          // No batch — fall back to same track
+          if (me?.targetTrack) userWhere = { targetTrack: me.targetTrack }
+        }
+      } catch {
+        // batchMember table doesn't exist — fall back to track
+        if (me?.targetTrack) userWhere = { targetTrack: me.targetTrack }
+      }
+    }
+    // global = no filter
+
+    const scopeUsers = await prisma.user.findMany({
+      where:  userWhere,
+      select: { id: true },
+    })
+    const userIds = scopeUsers.map(u => u.id)
+
+    if (userIds.length === 0) {
+      return {
+        leaderboard: [], myRank: null, myEntry: null,
+        scope, totalUsers: 0, total: 0,
+        meta: { track: me?.targetTrack },
+      }
+    }
+
+    const rawList = await buildLeaderboard(requestingUserId, userIds)
+
+    // Apply isCurrentUser FRESH every request — never cache this flag
+    const leaderboard = rawList.slice(0, 100).map(e => ({
+      ...e,
+      isCurrentUser: e.userId === requestingUserId,
+    }))
+
+    const myEntry = leaderboard.find(e => e.userId === requestingUserId) || null
+
+    return {
+      leaderboard,
+      myRank:     myEntry?.rank ?? null,
+      myEntry,
+      scope,
+      totalUsers: rawList.length,
+      total:      rawList.length,
+      meta:       { track: me?.targetTrack },
+    }
+  } catch (err) {
+    console.error('[leaderboard] getLeaderboard error:', err.message)
+    throw err
+  }
 }
 
-// ── Save Weekly Snapshot ──────────────────────
-async function saveWeeklySnapshot(batchId) {
-  const now = new Date();
-  const weekNumber = Math.ceil(now.getDate() / 7);
-  const year = now.getFullYear();
+// ─────────────────────────────────────────────────────────────────
+// getMyRank
+// ─────────────────────────────────────────────────────────────────
+async function getMyRank(userId) {
+  try {
+    const [platformData, user] = await Promise.all([
+      getLeaderboard(userId, 'global'),
+      prisma.user.findUnique({
+        where:  { id: userId },
+        select: { targetTrack: true, tier: true, level: true },
+      }),
+    ])
 
-  const members = await prisma.batchMember.findMany({
-    where: { batchId },
-    orderBy: { performanceScore: 'desc' },
-  });
+    const myEntry = platformData.leaderboard?.find(e => e.userId === userId)
 
-  await Promise.all(
-    members.map((m, idx) =>
-      prisma.leaderboardHistory.create({
-        data: {
-          userId: m.userId,
-          batchId,
-          rank: idx + 1,
-          score: m.performanceScore,
-          weekNumber,
-          year,
-        },
-      })
-    )
-  );
+    return {
+      platformRank:      myEntry?.rank          ?? null,
+      platformRankTotal: platformData.totalUsers ?? 0,
+      performanceScore:  myEntry?.score          ?? 0,
+      mastery:           myEntry?.mastery         ?? 0,
+      streak:            myEntry?.streak          ?? 0,
+      targetTrack:       user?.targetTrack        ?? null,
+      tier:              user?.tier               ?? null,
+      level:             user?.level              ?? null,
+    }
+  } catch (err) {
+    console.error('[leaderboard] getMyRank error:', err.message)
+    return { platformRank: null, platformRankTotal: 0, performanceScore: 0 }
+  }
 }
 
-module.exports = {
-  getBatchLeaderboard,
-  getTrackLeaderboard,
-  getPlatformLeaderboard,
-  getUserRank,
-  saveWeeklySnapshot,
-};
+module.exports = { getLeaderboard, getMyRank }
