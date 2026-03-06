@@ -10,8 +10,11 @@ const app = express();
 // ── Security & parsing ────────────────────────────────────────────
 app.use(helmet());
 app.use(compression());
+const allowedOrigins = process.env.CLIENT_URL === '*'
+  ? true
+  : (process.env.CLIENT_URL?.split(',') || ['http://localhost:3000']);
 app.use(cors({
-  origin: process.env.CLIENT_URL?.split(',') || ['http://localhost:3000'],
+  origin: allowedOrigins,
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
