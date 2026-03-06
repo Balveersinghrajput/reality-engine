@@ -1,21 +1,11 @@
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,       // smtp.gmail.com
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,                     // false for port 587 (STARTTLS)
-  auth: {
-    user: process.env.SMTP_USER,     // your gmail
-    pass: process.env.SMTP_PASS,     // 16-char app password
-  },
-});
+const https = require('https');
 
 async function sendOtpEmail(toEmail, otp) {
-  await transporter.sendMail({
-    from: `"RealityEngine" <${process.env.SMTP_USER}>`,
-    to: toEmail,                     // sends to THE USER'S email, not yours
+  const payload = JSON.stringify({
+    sender: { name: 'RealityEngine', email: 'noreply@realityengine.com' },
+    to: [{ email: toEmail }],
     subject: 'Your RealityEngine verification code',
-    html: `
+    htmlContent: `
       <div style="font-family: sans-serif; background: #000; color: #fff; padding: 40px; max-width: 480px; margin: auto; border-radius: 16px;">
         <h1 style="font-size: 28px; font-weight: 900; margin-bottom: 4px;">
           Reality<span style="color: #3b82f6;">Engine</span>
@@ -30,6 +20,35 @@ async function sendOtpEmail(toEmail, otp) {
         <p style="color: #555; font-size: 12px;">If you didn't request this, you can safely ignore this email.</p>
       </div>
     `,
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'api.brevo.com',
+        path: '/v3/smtp/email',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': process.env.BREVO_API_KEY,
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Brevo error ${res.statusCode}: ${data}`));
+          }
+        });
+      }
+    );
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
   });
 }
 
