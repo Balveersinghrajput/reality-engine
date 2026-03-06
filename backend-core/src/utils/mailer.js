@@ -2,7 +2,7 @@ const https = require('https');
 
 async function sendOtpEmail(toEmail, otp) {
   const payload = JSON.stringify({
-    sender: { name: 'RealityEngine', email: 'noreply@realityengine.com' },
+    sender: { name: 'RealityEngine', email: 'balveersinghrajput2004@gmail.com' },
     to: [{ email: toEmail }],
     subject: 'Your RealityEngine verification code',
     htmlContent: `
