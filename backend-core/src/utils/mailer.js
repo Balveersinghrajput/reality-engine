@@ -1,19 +1,11 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,       // smtp.gmail.com
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,                     // false for port 587 (STARTTLS)
-  auth: {
-    user: process.env.SMTP_USER,     // your gmail
-    pass: process.env.SMTP_PASS,     // 16-char app password
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function sendOtpEmail(toEmail, otp) {
-  await transporter.sendMail({
-    from: `"RealityEngine" <${process.env.SMTP_USER}>`,
-    to: toEmail,                     // sends to THE USER'S email, not yours
+  const { error } = await resend.emails.send({
+    from: 'RealityEngine <onboarding@resend.dev>', // ← change after adding your domain in Resend dashboard
+    to: toEmail,
     subject: 'Your RealityEngine verification code',
     html: `
       <div style="font-family: sans-serif; background: #000; color: #fff; padding: 40px; max-width: 480px; margin: auto; border-radius: 16px;">
@@ -31,6 +23,10 @@ async function sendOtpEmail(toEmail, otp) {
       </div>
     `,
   });
+
+  if (error) {
+    throw new Error(`Failed to send OTP email: ${error.message}`);
+  }
 }
 
 module.exports = { sendOtpEmail };
