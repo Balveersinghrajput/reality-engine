@@ -157,6 +157,7 @@ async function getDashboard(userId) {
 
   return {
     profile: {
+      id:          user.id,
       username:    user.username,
       profilePic:  user.profilePic,
       tier:        user.tier,
@@ -200,7 +201,7 @@ async function getDashboard(userId) {
 // ── Public profile ─────────────────────────────────────────────────
 async function getPublicProfile(username, viewerId) {
   const user = await prisma.user.findFirst({
-    where:  { username },
+    where:  { username: { equals: username, mode: 'insensitive' } },
     select: {
       id: true, username: true, profilePic: true, bio: true,
       githubUrl: true, linkedinUrl: true, portfolioUrl: true, skills: true,
@@ -251,10 +252,10 @@ async function getPublicProfile(username, viewerId) {
   };
 }
 
-// ✅ NEW: Get friends list for a public username
+// ── Get friends list for a public username ─────────────────────────
 async function getUserFriends(username) {
   const user = await prisma.user.findFirst({
-    where: { username },
+    where: { username: { equals: username, mode: 'insensitive' } },
     select: { id: true },
   });
 
@@ -274,7 +275,6 @@ async function getUserFriends(username) {
     },
   });
 
-  // Return the "other" person in each connection
   return connections.map(c =>
     c.senderId === user.id ? c.receiver : c.sender
   );
@@ -402,7 +402,7 @@ module.exports = {
   updateProfilePic,
   getDashboard,
   getPublicProfile,
-  getUserFriends,       // ✅ NEW
+  getUserFriends,
   getPosts,
   createPost,
   deletePost,
