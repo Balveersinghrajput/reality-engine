@@ -33,6 +33,8 @@ const CSS = `
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
+@keyframes otpPop{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,200,255,.4)}50%{box-shadow:0 0 0 6px rgba(0,200,255,0)}}
 body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased}
 
 .rp-root{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;
@@ -52,8 +54,7 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
   background:linear-gradient(90deg,transparent,rgba(0,200,255,.12),transparent);
   animation:scanline 10s linear infinite;pointer-events:none;z-index:0}
 
-.rp-wrap{position:relative;z-index:1;width:100%;max-width:460px;
-  animation:fadeUp .5s ease both}
+.rp-wrap{position:relative;z-index:1;width:100%;max-width:460px;animation:fadeUp .5s ease both}
 
 .rp-logo{text-align:center;margin-bottom:24px}
 .rp-logo-text{font-size:30px;font-weight:900;letter-spacing:-1px;color:#fff}
@@ -90,10 +91,8 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
   font-family:${MONO};letter-spacing:1px;padding:4px;transition:color .2s}
 .rp-eye:hover{color:#00c8ff}
 
-/* 2-col grid for username/email */
 .rp-row2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 
-/* Track picker */
 .rp-track-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:13px}
 .rp-track-opt{padding:9px 4px;border-radius:10px;border:1px solid rgba(255,255,255,.07);
   background:rgba(255,255,255,.02);cursor:pointer;transition:all .18s;text-align:center}
@@ -104,7 +103,6 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
   letter-spacing:.5px;white-space:nowrap}
 .rp-track-opt.on .rp-track-name{color:#00c8ff}
 
-/* Level / Mode row */
 .rp-sel-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:13px}
 .rp-sel-group{}
 .rp-sel-opts{display:flex;flex-direction:column;gap:5px;margin-top:6px}
@@ -117,7 +115,6 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
 .rp-sel-desc{font-size:8px;font-family:${MONO};color:#374151;margin-top:1px}
 .rp-sel-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
 
-/* Submit btn */
 .rp-btn{width:100%;padding:13px;border-radius:11px;border:none;cursor:pointer;
   font-size:13px;font-weight:700;font-family:'Syne',sans-serif;letter-spacing:.3px;
   transition:all .2s;position:relative;overflow:hidden;
@@ -134,37 +131,69 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
   font-family:${MONO};letter-spacing:1px;transition:color .2s}
 .rp-back:hover{color:#00c8ff}
 
-/* OTP */
-.rp-otp-row{display:flex;gap:7px;margin-bottom:20px}
-.rp-otp-box{flex:1;aspect-ratio:1;text-align:center;font-size:20px;font-weight:700;
-  font-family:${MONO};background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
-  border-radius:10px;color:#fff;outline:none;caret-color:#00c8ff;transition:border-color .15s,background .15s}
-.rp-otp-box:focus{border-color:rgba(0,200,255,.4);background:rgba(0,200,255,.04)}
-.rp-otp-box.filled{border-color:rgba(0,200,255,.3)}
+/* ── OTP REDESIGN ─────────────────────────────────── */
+.otp-container{margin-bottom:28px}
+.otp-header{text-align:center;margin-bottom:24px}
+.otp-icon{width:56px;height:56px;border-radius:16px;
+  background:rgba(0,200,255,.08);border:1px solid rgba(0,200,255,.2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;margin:0 auto 14px}
+.otp-title{font-size:18px;font-weight:800;color:#fff;margin-bottom:6px}
+.otp-desc{font-size:11px;color:#4b5563;font-family:${MONO};line-height:1.6}
+.otp-email{color:#00c8ff;font-weight:600}
 
-.rp-email-hl{color:#00c8ff;font-size:11px;font-weight:600;margin-bottom:20px;
-  font-family:${MONO};background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);
-  padding:6px 12px;border-radius:7px;display:inline-block}
+.otp-boxes{display:flex;gap:10px;justify-content:center;margin-bottom:8px}
+.otp-box{
+  width:52px;height:60px;text-align:center;font-size:24px;font-weight:700;
+  font-family:${MONO};
+  background:rgba(255,255,255,.03);
+  border:1.5px solid rgba(255,255,255,.1);
+  border-radius:14px;color:#fff;outline:none;
+  caret-color:#00c8ff;
+  transition:border-color .15s,background .15s,box-shadow .15s,transform .1s;
+  -webkit-appearance:none;
+}
+.otp-box:focus{
+  border-color:#00c8ff;
+  background:rgba(0,200,255,.06);
+  box-shadow:0 0 0 3px rgba(0,200,255,.15);
+  transform:translateY(-2px);
+  animation:pulse 1.5s ease infinite;
+}
+.otp-box.filled{
+  border-color:rgba(0,200,255,.5);
+  background:rgba(0,200,255,.08);
+  color:#00c8ff;
+  animation:otpPop .2s ease both;
+}
+.otp-box.complete{
+  border-color:rgba(0,255,150,.5);
+  background:rgba(0,255,150,.06);
+  color:#00ff96;
+}
+.otp-hint{text-align:center;font-size:9px;font-family:${MONO};
+  color:#1f2937;letter-spacing:1.5px;text-transform:uppercase}
 
+.otp-progress{display:flex;gap:5px;justify-content:center;margin-bottom:18px}
+.otp-prog-dot{width:8px;height:8px;border-radius:50%;
+  background:rgba(255,255,255,.08);transition:all .2s}
+.otp-prog-dot.filled{background:#00c8ff;transform:scale(1.2)}
+.otp-prog-dot.complete{background:#00ff96}
+
+/* ── rest ─────────────────────────────────────────── */
 .rp-err-msg{color:#ef4444;font-size:10px;margin-top:4px;font-family:${MONO}}
-
 .rp-divider{display:flex;align-items:center;gap:10px;margin:16px 0;
   color:#1f2937;font-size:10px;font-family:${MONO}}
 .rp-divider::before,.rp-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.05)}
-
 .rp-bottom{text-align:center;color:#374151;margin-top:16px;font-size:12px}
 .rp-bottom a{color:#00c8ff;text-decoration:none;font-weight:600;transition:color .2s}
 .rp-bottom a:hover{color:#38bdf8}
-
 .rp-spinner{display:inline-block;width:11px;height:11px;border-radius:50%;
   border:2px solid rgba(255,255,255,.2);border-top-color:#fff;
   animation:spin .6s linear infinite;margin-right:7px;vertical-align:middle}
-
-.rp-resend{text-align:center;font-size:12px;color:#374151}
+.rp-resend{text-align:center;font-size:12px;color:#374151;margin-top:4px}
 .rp-resend-btn{background:none;border:none;font-size:12px;cursor:pointer;
   padding:0;font-family:'Syne',sans-serif;transition:color .2s}
-
-/* Step indicator */
 .rp-steps{display:flex;align-items:center;gap:6px;margin-bottom:22px}
 .rp-step-dot{width:24px;height:4px;border-radius:99px;transition:background .3s}
 .rp-step-label{font-size:9px;font-family:${MONO};color:#374151;letter-spacing:1.5px;
@@ -176,6 +205,8 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
   .rp-track-grid{grid-template-columns:repeat(4,1fr)}
   .rp-track-name{font-size:7.5px}
   .rp-sel-row{grid-template-columns:1fr 1fr}
+  .otp-box{width:44px;height:54px;font-size:20px;border-radius:12px}
+  .otp-boxes{gap:7px}
 }
 `
 
@@ -196,9 +227,11 @@ export default function RegisterPage() {
   })
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const passwordMismatch = !!form.confirmPassword && form.confirmPassword !== form.password
+  const otpFilled = otp.filter(Boolean).length
+  const otpComplete = otpFilled === 6
 
   function startResendTimer() {
     setResendTimer(30)
@@ -222,8 +255,9 @@ export default function RegisterPage() {
       setStep('otp'); startResendTimer()
       setTimeout(() => otpRefs.current[0]?.focus(), 100)
       toast.success('OTP sent! Check your email.')
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to send OTP')
+    } catch (err: unknown) {
+      const msg = (err as {response?: {data?: {message?: string}}})?.response?.data?.message
+      toast.error(msg || 'Failed to send OTP')
     } finally { setLoading(false) }
   }
 
@@ -243,8 +277,9 @@ export default function RegisterPage() {
       setUser(user)
       toast.success('Welcome to Reality Engine!')
       router.push('/dashboard')
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Invalid OTP or registration failed')
+    } catch (err: unknown) {
+      const msg = (err as {response?: {data?: {message?: string}}})?.response?.data?.message
+      toast.error(msg || 'Invalid OTP or registration failed')
       setOtp(['','','','','','']); otpRefs.current[0]?.focus()
     } finally { setLoading(false) }
   }
@@ -309,51 +344,40 @@ export default function RegisterPage() {
                 <div className="rp-subtitle">Fill in your details to get started</div>
 
                 <form onSubmit={handleFormSubmit}>
-                  {/* Username + Email */}
                   <div className="rp-row2" style={{ marginBottom: 13 }}>
                     <div>
                       <label className="rp-label">Username</label>
-                      <input
-                        className="rp-input" required value={form.username}
+                      <input className="rp-input" required value={form.username}
                         placeholder="balveer"
-                        onChange={e => setForm({ ...form, username: e.target.value })}
-                      />
+                        onChange={e => setForm({ ...form, username: e.target.value })} />
                     </div>
                     <div>
                       <label className="rp-label">Email</label>
-                      <input
-                        className="rp-input" type="email" required value={form.email}
+                      <input className="rp-input" type="email" required value={form.email}
                         placeholder="you@example.com"
-                        onChange={e => setForm({ ...form, email: e.target.value })}
-                      />
+                        onChange={e => setForm({ ...form, email: e.target.value })} />
                     </div>
                   </div>
 
-                  {/* Password */}
                   <div className="rp-field">
                     <label className="rp-label">Password</label>
                     <div className="rp-input-wrap">
-                      <input
-                        className="rp-input" type={showPassword ? 'text' : 'password'} required
+                      <input className="rp-input" type={showPassword ? 'text' : 'password'} required
                         placeholder="••••••••" value={form.password} style={{ paddingRight: 52 }}
-                        onChange={e => setForm({ ...form, password: e.target.value })}
-                      />
+                        onChange={e => setForm({ ...form, password: e.target.value })} />
                       <button type="button" className="rp-eye" onClick={() => setShowPassword(v => !v)}>
                         {showPassword ? 'HIDE' : 'SHOW'}
                       </button>
                     </div>
                   </div>
 
-                  {/* Confirm Password */}
                   <div className="rp-field">
                     <label className="rp-label">Confirm Password</label>
                     <div className="rp-input-wrap">
-                      <input
-                        className={`rp-input ${passwordMismatch ? 'err' : ''}`}
+                      <input className={`rp-input ${passwordMismatch ? 'err' : ''}`}
                         type={showConfirm ? 'text' : 'password'} required
                         placeholder="••••••••" value={form.confirmPassword} style={{ paddingRight: 52 }}
-                        onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
-                      />
+                        onChange={e => setForm({ ...form, confirmPassword: e.target.value })} />
                       <button type="button" className="rp-eye" onClick={() => setShowConfirm(v => !v)}>
                         {showConfirm ? 'HIDE' : 'SHOW'}
                       </button>
@@ -361,16 +385,12 @@ export default function RegisterPage() {
                     {passwordMismatch && <p className="rp-err-msg">Passwords do not match</p>}
                   </div>
 
-                  {/* Track Picker */}
                   <div className="rp-field">
                     <label className="rp-label">Learning Track</label>
                     <div className="rp-track-grid">
                       {TRACKS.map(t => (
-                        <div
-                          key={t}
-                          className={`rp-track-opt ${form.targetTrack === t ? 'on' : ''}`}
-                          onClick={() => setForm({ ...form, targetTrack: t })}
-                        >
+                        <div key={t} className={`rp-track-opt ${form.targetTrack === t ? 'on' : ''}`}
+                          onClick={() => setForm({ ...form, targetTrack: t })}>
                           <div className="rp-track-icon">{TRACK_ICONS[t]}</div>
                           <div className="rp-track-name">{t.replace('_', ' ')}</div>
                         </div>
@@ -378,19 +398,14 @@ export default function RegisterPage() {
                     </div>
                   </div>
 
-                  {/* Level + Mode */}
                   <div className="rp-sel-row">
-                    {/* Level */}
                     <div className="rp-sel-group">
                       <label className="rp-label">Level</label>
                       <div className="rp-sel-opts">
                         {LEVELS.map(l => (
-                          <div
-                            key={l}
-                            className={`rp-sel-opt ${form.level === l ? 'on' : ''}`}
+                          <div key={l} className={`rp-sel-opt ${form.level === l ? 'on' : ''}`}
                             style={{ color: form.level === l ? '#00c8ff' : '#374151' }}
-                            onClick={() => setForm({ ...form, level: l })}
-                          >
+                            onClick={() => setForm({ ...form, level: l })}>
                             <div>
                               <div className="rp-sel-name" style={{ color: form.level === l ? '#00c8ff' : '#9ca3af' }}>{l}</div>
                               <div className="rp-sel-desc">{LEVEL_DESC[l]}</div>
@@ -401,7 +416,6 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Mode */}
                     <div className="rp-sel-group">
                       <label className="rp-label">Mode</label>
                       <div className="rp-sel-opts">
@@ -409,12 +423,9 @@ export default function RegisterPage() {
                           const md = MODE_DESC[m]
                           const active = form.mode === m
                           return (
-                            <div
-                              key={m}
-                              className={`rp-sel-opt ${active ? 'on' : ''}`}
+                            <div key={m} className={`rp-sel-opt ${active ? 'on' : ''}`}
                               style={{ color: active ? md.color : '#374151', borderColor: active ? md.color + '40' : 'rgba(255,255,255,.06)' }}
-                              onClick={() => setForm({ ...form, mode: m })}
-                            >
+                              onClick={() => setForm({ ...form, mode: m })}>
                               <div>
                                 <div className="rp-sel-name" style={{ color: active ? md.color : '#9ca3af' }}>{m}</div>
                                 <div className="rp-sel-desc">{md.label}</div>
@@ -429,9 +440,7 @@ export default function RegisterPage() {
 
                   <button type="submit" className="rp-btn" disabled={loading || passwordMismatch}>
                     <span>
-                      {loading
-                        ? <><span className="rp-spinner" />Sending OTP...</>
-                        : 'Continue →'}
+                      {loading ? <><span className="rp-spinner" />Sending OTP...</> : 'Continue →'}
                     </span>
                   </button>
                 </form>
@@ -441,49 +450,67 @@ export default function RegisterPage() {
             {/* ── STEP 2: OTP ── */}
             {step === 'otp' && (
               <>
-                <button
-                  type="button" className="rp-back"
-                  onClick={() => { setStep('form'); setOtp(['','','','','','']) }}
-                >
+                <button type="button" className="rp-back"
+                  onClick={() => { setStep('form'); setOtp(['','','','','','']) }}>
                   ← Back
                 </button>
 
-                <div className="rp-title">Verify your email</div>
-                <p style={{ fontSize: 12, color: '#374151', marginBottom: 8 }}>6-digit code sent to</p>
-                <div className="rp-email-hl">{form.email}</div>
+                {/* OTP Header */}
+                <div className="otp-header">
+                  <div className="otp-icon">📬</div>
+                  <div className="otp-title">Check your inbox</div>
+                  <div className="otp-desc">
+                    We sent a 6-digit code to<br />
+                    <span className="otp-email">{form.email}</span>
+                  </div>
+                </div>
 
                 <form onSubmit={handleVerifyAndRegister}>
-                  <div className="rp-otp-row" onPaste={handleOtpPaste}>
-                    {otp.map((digit, i) => (
-                      <input
-                        key={i}
-                        ref={el => { otpRefs.current[i] = el }}
-                        className={`rp-otp-box ${digit ? 'filled' : ''}`}
-                        type="text" inputMode="numeric" maxLength={1}
-                        value={digit} placeholder="·"
-                        onChange={e => handleOtpChange(i, e.target.value)}
-                        onKeyDown={e => handleOtpKeyDown(i, e)}
-                      />
-                    ))}
+                  <div className="otp-container">
+                    {/* Progress dots */}
+                    <div className="otp-progress">
+                      {otp.map((d, i) => (
+                        <div key={i} className={`otp-prog-dot ${otpComplete ? 'complete' : d ? 'filled' : ''}`} />
+                      ))}
+                    </div>
+
+                    {/* OTP Boxes */}
+                    <div className="otp-boxes" onPaste={handleOtpPaste}>
+                      {otp.map((digit, i) => (
+                        <input
+                          key={i}
+                          ref={el => { otpRefs.current[i] = el }}
+                          className={`otp-box ${otpComplete ? 'complete' : digit ? 'filled' : ''}`}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          placeholder="·"
+                          onChange={e => handleOtpChange(i, e.target.value)}
+                          onKeyDown={e => handleOtpKeyDown(i, e)}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="otp-hint">
+                      {otpComplete ? '✓ Code complete — tap verify' : `${otpFilled} of 6 entered`}
+                    </div>
                   </div>
 
-                  <button type="submit" className="rp-btn" disabled={loading} style={{ marginBottom: 14 }}>
+                  <button type="submit" className="rp-btn" disabled={loading || !otpComplete}
+                    style={{ marginBottom: 14, background: otpComplete ? 'linear-gradient(135deg,rgba(0,200,255,.2),rgba(139,92,246,.2))' : undefined, borderColor: otpComplete ? 'rgba(0,200,255,.4)' : undefined }}>
                     <span>
-                      {loading
-                        ? <><span className="rp-spinner" />Creating account...</>
-                        : 'Verify & Create Account'}
+                      {loading ? <><span className="rp-spinner" />Creating account...</> : 'Verify & Create Account'}
                     </span>
                   </button>
                 </form>
 
                 <p className="rp-resend">
-                  Didn't get it?{' '}
-                  <button
-                    type="button" onClick={handleResend}
+                  Didn&apos;t receive it?{' '}
+                  <button type="button" onClick={handleResend}
                     disabled={resendTimer > 0 || loading}
                     className="rp-resend-btn"
-                    style={{ color: resendTimer > 0 ? '#374151' : '#00c8ff', cursor: resendTimer > 0 ? 'default' : 'pointer' }}
-                  >
+                    style={{ color: resendTimer > 0 ? '#374151' : '#00c8ff', cursor: resendTimer > 0 ? 'default' : 'pointer' }}>
                     {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
                   </button>
                 </p>

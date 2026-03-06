@@ -29,7 +29,7 @@ interface TestRecord {
 interface LbEntry {
   rank: number; userId: string; username: string; tier: string; level: string
   score: number; mastery: number; streak: number; testsCount: number
-  xp: number; isCurrentUser?: boolean
+  xp: number; testAvg: number; isCurrentUser?: boolean
 }
 
 type PhaseTask = { title: string; description: string; category: string; estimatedMinutes: number; priority: 'high'|'medium'|'low'; xp?: number }
@@ -151,10 +151,10 @@ const savePhase  = (uid: string, p: number) => localStorage.setItem(phaseKey(uid
 // ─────────────────────────────────────────────
 // Stats computation
 // ─────────────────────────────────────────────
-function computeStats(tasks: DailyTask[], tests: TestRecord[], sigma: any[], backendPerf: any) {
+function computeStats(tasks: DailyTask[], tests: TestRecord[], sigma: {score?:number;date?:string}[], backendPerf: {masteryPercent?:number;streakLongest?:number} | null) {
   const scores = [
     ...tests.map(t => t.score),
-    ...(sigma || []).map((s: any) => s.score || 0).filter((s: number) => s > 0),
+    ...(sigma || []).map(s => s.score || 0).filter(s => s > 0),
   ]
   const mastery = scores.length
     ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
@@ -203,9 +203,7 @@ const TIER_C: Record<string, string> = {
 const levelC: Record<string, string> = { beginner: '#22c55e', intermediate: '#f59e0b', advanced: '#a855f7' }
 
 // ─────────────────────────────────────────────
-// CSS — KEY FIXES:
-//   1. bottom-row → single-col on mobile
-//   2. lb-scroll → custom scrollbar + fade-out bottom hint
+// CSS
 // ─────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;700&display=swap');
@@ -218,12 +216,10 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-thumb{background:#1a1a2e;border-radius:2px}
 
-/* ── lb custom scroll ─────────────────────────── */
-.lb-scroll::-webkit-scrollbar{width:3px}
-.lb-scroll::-webkit-scrollbar-track{background:rgba(255,255,255,.02);border-radius:2px}
-.lb-scroll::-webkit-scrollbar-thumb{background:rgba(251,191,36,.25);border-radius:2px}
-.lb-scroll::-webkit-scrollbar-thumb:hover{background:rgba(251,191,36,.45)}
-.lb-scroll{scrollbar-width:thin;scrollbar-color:rgba(251,191,36,.25) rgba(255,255,255,.02)}
+/* ── lb scroll — fully transparent, still scrollable ── */
+.lb-scroll::-webkit-scrollbar{width:0px;background:transparent}
+.lb-scroll::-webkit-scrollbar-thumb{background:transparent}
+.lb-scroll{scrollbar-width:none;-ms-overflow-style:none;overflow-y:auto}
 
 .db-root{min-height:100vh;background:#030307}
 .db-bg{position:fixed;inset:0;pointer-events:none;z-index:0;
@@ -255,10 +251,7 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
 .rank-num{font-size:38px;font-weight:900;color:#fff;line-height:1;letter-spacing:-2px;margin-bottom:3px}
 .rank-num span{font-size:13px;font-weight:500;color:#1f2937;margin-left:2px}
 .main-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
-
-/* ── BOTTOM ROW — responsive ──────────────────── */
 .bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-
 .panel{background:rgba(255,255,255,.018);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:16px}
 .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px}
 .pt{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#e2e8f0}
@@ -292,23 +285,6 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
 .phase-badge{display:inline-flex;align-items:center;gap:4px;font-size:8px;font-family:${MONO};letter-spacing:1.2px;padding:2px 7px;border-radius:4px;text-transform:uppercase;font-weight:700}
 .xp-badge{font-size:7px;font-family:${MONO};color:#fbbf24;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);padding:1px 5px;border-radius:3px;font-weight:700}
 
-/* ── Scroll fade hint on lb list ──────────────── */
-.lb-scroll-wrap{position:relative}
-.lb-scroll-wrap::after{
-  content:'';position:absolute;bottom:0;left:0;right:0;height:40px;
-  background:linear-gradient(to bottom,transparent,#07080f);
-  pointer-events:none;border-radius:0 0 10px 10px;
-  transition:opacity .3s;
-}
-.lb-scroll-wrap.at-bottom::after{opacity:0}
-.lb-scroll-arrow{
-  position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
-  width:20px;height:20px;border-radius:50%;
-  background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);
-  display:flex;align-items:center;justify-content:center;
-  animation:scrollHint 2s ease infinite;z-index:2;pointer-events:none;
-}
-
 /* ── Responsive breakpoints ───────────────────── */
 @media(max-width:1200px){
   .main-grid{grid-template-columns:1fr 1fr}
@@ -326,7 +302,6 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
   .rank-grid{grid-template-columns:1fr 1fr}
   .brand-name{font-size:17px}
   .stat-val{font-size:20px}
-  /* ── BOTTOM ROW: stack vertically on tablet/mobile ── */
   .bottom-row{grid-template-columns:1fr}
 }
 @media(max-width:560px){
@@ -343,13 +318,9 @@ body{background:#030307;color:#fff;font-family:'Syne',sans-serif;-webkit-font-sm
 `
 
 // ─────────────────────────────────────────────
-// LeaderboardPanel
+// LeaderboardPanel — ALL players in one scrollable list
 // ─────────────────────────────────────────────
-
-// How many rows to show before scroll kicks in
-const LB_VISIBLE_ROWS = 4
-
-function LeaderboardPanel({ userId, profile }: { userId: string; profile: any }) {
+function LeaderboardPanel({ userId, profile }: { userId: string; profile: { targetTrack?: string; tier?: string; level?: string; username?: string; mode?: string; profilePic?: string } | null }) {
   const [scope,    setScope]   = useState<'global'|'track'|'batch'>('global')
   const [entries,  setEntries] = useState<LbEntry[]>([])
   const [myRank,   setMyRank]  = useState<number|null>(null)
@@ -367,30 +338,51 @@ function LeaderboardPanel({ userId, profile }: { userId: string; profile: any })
       const r = await api.get(`/leaderboard?${params}`)
       const d = r.data?.data || r.data
       const raw = d?.leaderboard || d?.users || d?.rankings || []
-      const lb: LbEntry[] = raw.map((u: any, i: number) => ({
-        rank:          u.rank          || i + 1,
-        userId:        u.userId        || u.id || '',
-        username:      u.username      || u.name || 'Unknown',
-        tier:          u.tier          || 'developing',
-        level:         u.level         || 'beginner',
-        score:         Math.round(u.score ?? u.avgScore ?? u.averageScore ?? u.performanceScore ?? 0),
-        mastery:       Math.round(u.mastery ?? u.masteryPercent ?? 0),
-        streak:        u.streak        ?? u.streakCurrent ?? 0,
-        testsCount:    u.testsCount    ?? u.testCount ?? u.tests ?? 0,
-        xp:            u.xp            ?? u.totalXP ?? u.xpTotal ?? 0,
-        isCurrentUser: !!(u.isCurrentUser || u.userId === userId || u.id === userId),
-      }))
+      console.log('[LB] raw API sample:', raw[0]) // ← remove after confirming scores work
+      interface RawLbUser {
+        rank?: number; userId?: string; id?: string; username?: string; name?: string
+        tier?: string; level?: string; score?: number; avgScore?: number; averageScore?: number
+        performanceScore?: number; testAvg?: number; avgTestScore?: number
+        mastery?: number; masteryPercent?: number; masteryPercentage?: number
+        streak?: number; streakCurrent?: number; currentStreak?: number
+        xp?: number; totalXP?: number; xpTotal?: number
+        testCount?: number; testsCount?: number; tests?: number; totalTests?: number
+        isCurrentUser?: boolean
+      }
+      const lb: LbEntry[] = (raw as RawLbUser[]).map((u: RawLbUser, i: number) => {
+        // Backend sends: score (composite), testAvg, mastery, streak, xp, testCount
+        const score   = Math.round(u.score ?? u.avgScore ?? u.averageScore ?? u.performanceScore ?? 0)
+        const testAvg = Math.round(u.testAvg ?? u.avgTestScore ?? u.avgScore ?? 0)
+        const mastery = Math.round(u.mastery ?? u.masteryPercent ?? u.masteryPercentage ?? 0)
+        const streak  = u.streak ?? u.streakCurrent ?? u.currentStreak ?? 0
+        const xp      = u.xp ?? u.totalXP ?? u.xpTotal ?? 0
+        const tests   = u.testCount ?? u.testsCount ?? u.testCount ?? u.tests ?? 0
+        return {
+          rank:          u.rank || i + 1,
+          userId:        u.userId || u.id || '',
+          username:      u.username || u.name || 'Unknown',
+          tier:          u.tier || 'developing',
+          level:         u.level || 'beginner',
+          score,
+          testAvg,
+          mastery,
+          streak,
+          testsCount:    tests,
+          xp,
+          isCurrentUser: !!(u.isCurrentUser || u.userId === userId || u.id === userId),
+        }
+      })
       setEntries(lb)
       setMyRank(d?.myRank ?? lb.find(e => e.isCurrentUser)?.rank ?? null)
       setTotal(d?.total ?? d?.totalUsers ?? lb.length)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      console.error('[LB] fetch error:', err)
       setError('Failed to load rankings'); setEntries([])
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { if (userId) fetchLb(scope) }, [scope, userId])
+  useEffect(() => { if (userId) fetchLb(scope) }, [scope, userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Track scroll position to hide bottom fade when at bottom
   const onScroll = () => {
     const el = scrollRef.current
     if (!el) return
@@ -398,11 +390,6 @@ function LeaderboardPanel({ userId, profile }: { userId: string; profile: any })
   }
 
   const me = entries.find(e => e.isCurrentUser)
-  const hasMore = entries.length > LB_VISIBLE_ROWS
-
-  // Row height = ~48px each — clamp visible area
-  const ROW_H   = 48
-  const maxH    = LB_VISIBLE_ROWS * ROW_H
 
   return (
     <div className="panel" style={{ borderColor: 'rgba(251,191,36,.09)' }}>
@@ -472,90 +459,75 @@ function LeaderboardPanel({ userId, profile }: { userId: string; profile: any })
         </div>
       )}
 
-      {/* Table */}
+      {/* ── TABLE: sticky header + ALL rows in one scroll ── */}
       {!loading && !error && entries.length > 0 && (
-        <div style={{ background: '#07080f', border: '1px solid rgba(255,255,255,.06)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ background: '#07080f', border: '1px solid rgba(255,255,255,.06)', borderRadius: 10, overflow: 'hidden', position: 'relative' }}>
 
-          {/* Header */}
-          <div className="lb-row" style={{ background: 'rgba(255,255,255,.025)', padding: '6px 12px' }}>
+          {/* Sticky header */}
+          <div className="lb-row" style={{ background: 'rgba(255,255,255,.03)', padding: '6px 12px', position: 'sticky', top: 0, zIndex: 2, borderBottom: '1px solid rgba(255,255,255,.07)' }}>
             <div className="lb-head">#</div>
             <div className="lb-head">Player</div>
             <div className="lb-head">Score</div>
-            <div className="lb-head">Mastery</div>
+            <div className="lb-head">XP</div>
             <div className="lb-head">Streak</div>
           </div>
 
-          {/* First N rows always visible */}
-          {entries.slice(0, LB_VISIBLE_ROWS).map((e, idx) => (
-            <LbRow key={`top-${idx}-${e.userId}`} e={e} />
-          ))}
+          {/* ALL rows — single unified scrollable list */}
+          <div
+            ref={scrollRef}
+            className="lb-scroll"
+            onScroll={onScroll}
+            style={{ maxHeight: 280, overflowY: 'auto' }}
+          >
+            {entries.map((e, idx) => (
+              <LbRow key={`row-${idx}-${e.userId}`} e={e} />
+            ))}
+          </div>
 
-          {/* Scrollable zone for remaining rows */}
-          {hasMore && (
-            <div
-              className={`lb-scroll-wrap ${atBottom ? 'at-bottom' : ''}`}
-              style={{ position: 'relative' }}
-            >
-              {/* Scroll container */}
-              <div
-                ref={scrollRef}
-                className="lb-scroll"
-                onScroll={onScroll}
-                style={{
-                  maxHeight: maxH,
-                  overflowY: 'auto',
-                  // subtle top border to separate fixed vs scrollable
-                  borderTop: '1px dashed rgba(251,191,36,.12)',
-                }}
-              >
-                {entries.slice(LB_VISIBLE_ROWS).map((e, idx) => (
-                  <LbRow key={`rest-${idx}-${e.userId}`} e={e} />
-                ))}
-              </div>
-
-              {/* Bottom fade + animated arrow — hidden when at bottom */}
-              {!atBottom && (
-                <>
-                  {/* fade overlay */}
-                  <div style={{
-                    position: 'absolute', bottom: 0, left: 0, right: 0, height: 42,
-                    background: 'linear-gradient(to bottom, transparent, #07080f)',
-                    pointerEvents: 'none', borderRadius: '0 0 10px 10px',
-                  }} />
-                  {/* bouncing arrow */}
-                  <div style={{
-                    position: 'absolute', bottom: 7, left: '50%', transform: 'translateX(-50%)',
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: 'rgba(251,191,36,.14)', border: '1px solid rgba(251,191,36,.3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    animation: 'scrollHint 2s ease infinite', zIndex: 2, pointerEvents: 'none',
-                  }}>
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                      <path d="M1 2.5L4 5.5L7 2.5" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                </>
-              )}
-
-              {/* Count badge */}
-              <div style={{ padding: '5px 12px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,.04)' }}>
-                <span style={{ fontSize: 8, color: '#374151', fontFamily: MONO, letterSpacing: 1 }}>
-                  +{entries.length - LB_VISIBLE_ROWS} more · scroll to see
-                </span>
+          {/* Bottom fade + bounce arrow when more rows below */}
+          {!atBottom && entries.length > 5 && (
+            <div style={{ position: 'relative', pointerEvents: 'none' }}>
+              <div style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0, height: 44,
+                background: 'linear-gradient(to bottom, transparent, #07080f)',
+                borderRadius: '0 0 10px 10px',
+              }} />
+              <div style={{
+                position: 'absolute', bottom: 7, left: '50%', transform: 'translateX(-50%)',
+                width: 20, height: 20, borderRadius: '50%',
+                background: 'rgba(251,191,36,.14)', border: '1px solid rgba(251,191,36,.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                animation: 'scrollHint 2s ease infinite', zIndex: 3,
+              }}>
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <path d="M1 2.5L4 5.5L7 2.5" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
             </div>
           )}
+
+          {/* Footer */}
+          <div style={{ padding: '6px 12px', borderTop: '1px solid rgba(255,255,255,.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 8, color: '#374151', fontFamily: MONO }}>{entries.length} players ranked</span>
+            {!atBottom && entries.length > 5 && (
+              <span style={{ fontSize: 8, color: 'rgba(251,191,36,.5)', fontFamily: MONO }}>scroll ↓</span>
+            )}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-// ── Shared row component ────────────────────────────────────────────────────
+// ── Shared row component ──────────────────────────────────────────────────────
 function LbRow({ e }: { e: LbEntry }) {
   const tc = TIER_C[e.tier] || '#6b7280'
-  const sc = e.score >= 75 ? '#22c55e' : e.score >= 50 ? '#f59e0b' : '#9ca3af'
+  // Use composite score; fall back to testAvg if score=0 but tests exist
+  const displayScore = e.score > 0 ? e.score : e.testAvg > 0 ? e.testAvg : 0
+  const sc = displayScore >= 75 ? '#22c55e' : displayScore >= 50 ? '#f59e0b' : displayScore > 0 ? '#9ca3af' : '#374151'
   const rankColor = e.rank === 1 ? '#fbbf24' : e.rank === 2 ? '#9ca3af' : e.rank === 3 ? '#f97316' : '#374151'
+  // Format XP nicely: 1200 → 1.2k
+  const fmtXP = (n: number) => n >= 1000 ? `${(n/1000).toFixed(1)}k` : `${n}`
   return (
     <div className={`lb-row ${e.isCurrentUser ? 'me' : ''}`}>
       <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 800, color: rankColor }}>
@@ -569,17 +541,23 @@ function LbRow({ e }: { e: LbEntry }) {
           <div style={{ fontSize: 10, fontWeight: 700, color: e.isCurrentUser ? '#fbbf24' : '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {e.username}{e.isCurrentUser && <span style={{ fontSize: 7, color: '#fbbf24', marginLeft: 3 }}>YOU</span>}
           </div>
-          <div style={{ fontSize: 7, color: tc, textTransform: 'capitalize', fontFamily: MONO }}>{e.tier}·{e.level}</div>
+          <div style={{ fontSize: 7, color: tc, textTransform: 'capitalize', fontFamily: MONO }}>
+            {e.tier}·{e.level}
+            {e.testsCount > 0 && <span style={{ color: '#374151', marginLeft: 4 }}>{e.testsCount} tests</span>}
+          </div>
         </div>
       </div>
-      <div style={{ fontSize: 11, fontWeight: 800, color: e.score > 0 ? sc : '#374151', fontFamily: MONO }}>
-        {e.score > 0 ? `${e.score}%` : '—'}
+      {/* Score — composite if available, else testAvg, else 0 */}
+      <div style={{ fontSize: 11, fontWeight: 800, color: displayScore > 0 ? sc : '#2a2a2a', fontFamily: MONO }}>
+        {displayScore > 0 ? `${displayScore}%` : '0%'}
       </div>
-      <div style={{ fontSize: 9, color: e.mastery > 0 ? '#6b7280' : '#1f2937', fontFamily: MONO }}>
-        {e.mastery > 0 ? `${e.mastery}%` : '—'}
+      {/* XP — always show real number */}
+      <div style={{ fontSize: 9, fontWeight: 700, color: e.xp > 0 ? '#fbbf24' : '#2a2a2a', fontFamily: MONO }}>
+        {e.xp > 0 ? fmtXP(e.xp) : '0'}
       </div>
-      <div style={{ fontSize: 9, color: e.streak > 0 ? '#f59e0b' : '#1f2937', fontFamily: MONO }}>
-        {e.streak > 0 ? `${e.streak}d` : '—'}
+      {/* Streak */}
+      <div style={{ fontSize: 9, color: e.streak > 0 ? '#f59e0b' : '#2a2a2a', fontFamily: MONO }}>
+        {e.streak > 0 ? `${e.streak}d` : '0d'}
       </div>
     </div>
   )
@@ -682,6 +660,17 @@ function TasksPanel({ tasks, track, onToggle, onNextPhase, onRefresh, loading, p
   )
 }
 
+// ── Test chart tooltip — defined outside component to avoid render issues ──
+function TestTooltip({ active, payload }: { active?: boolean; payload?: { payload: { score: number; passed: boolean } }[] }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div style={{ background: '#060d14', border: `1px solid ${d.passed ? 'rgba(0,255,150,.3)' : 'rgba(239,68,68,.3)'}`, borderRadius: 7, padding: '6px 10px', fontSize: 11 }}>
+      <div style={{ color: d.passed ? '#00ff96' : '#ef4444', fontWeight: 800, fontSize: 14, fontFamily: MONO }}>{d.score}%</div>
+    </div>
+  )
+}
+
 // ─────────────────────────────────────────────
 // TestPerfPanel
 // ─────────────────────────────────────────────
@@ -716,13 +705,7 @@ function TestPerfPanel({ tests }: { tests: TestRecord[] }) {
     </div>
   )
 
-  const TT = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null
-    const d = payload[0].payload
-    return <div style={{ background: '#060d14', border: `1px solid ${d.passed ? 'rgba(0,255,150,.3)' : 'rgba(239,68,68,.3)'}`, borderRadius: 7, padding: '6px 10px', fontSize: 11 }}>
-      <div style={{ color: d.passed ? '#00ff96' : '#ef4444', fontWeight: 800, fontSize: 14, fontFamily: MONO }}>{d.score}%</div>
-    </div>
-  }
+  const TT = TestTooltip // stable reference, defined outside component
 
   return (
     <div className="panel" style={{ borderColor: 'rgba(59,130,246,.08)' }}>
@@ -756,7 +739,9 @@ function TestPerfPanel({ tests }: { tests: TestRecord[] }) {
               <YAxis domain={[0, 100]} tick={{ fill: '#374151', fontSize: 7 }} axisLine={false} tickLine={false} />
               <Tooltip content={<TT />} />
               <Area type="monotone" dataKey="score" stroke="#3b82f6" strokeWidth={2} fill="url(#tg)"
-                dot={(p: any) => <circle key={p.index} cx={p.cx} cy={p.cy} r={3} fill={p.payload.passed ? '#00ff96' : '#ef4444'} />} activeDot={false} />
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                dot={(p: any) => <circle key={p.index} cx={p.cx} cy={p.cy} r={3} fill={p.payload?.passed ? '#00ff96' : '#ef4444'} />}
+                activeDot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -835,13 +820,15 @@ export default function DashboardPage() {
   const ranks   = data?.ranks
 
   const allTests: TestRecord[] = useMemo(() => {
-    const a1: any[] = Array.isArray(testData)  ? testData  : []
-    const a2: any[] = Array.isArray(sigmaData) ? sigmaData.flatMap((d: any) =>
-      d.challenges > 0 ? [{ id: `sigma-${d.date}`, score: d.score, passed: d.score >= 60, difficulty: 'medium', date: d.date, topic: 'SIGMA' }] : []
+    interface RawTest { id?: string; createdAt?: string; score?: number; percentage?: number; passed?: boolean; difficulty?: string; date?: string; timeTaken?: number; topic?: string; challengeTitle?: string }
+    interface RawSigma { challenges?: number; score?: number; date?: string }
+    const a1: RawTest[] = Array.isArray(testData)  ? (testData  as RawTest[])  : []
+    const a2: RawTest[] = Array.isArray(sigmaData) ? (sigmaData as RawSigma[]).flatMap((d: RawSigma) =>
+      (d.challenges ?? 0) > 0 ? [{ id: `sigma-${d.date}`, score: d.score ?? 0, passed: (d.score ?? 0) >= 60, difficulty: 'medium', date: d.date, topic: 'SIGMA' }] : []
     ) : []
     const seen = new Set<string>()
-    return [...a1, ...a2].reduce((acc: TestRecord[], t: any) => {
-      const id = t.id || t.createdAt
+    return [...a1, ...a2].reduce((acc: TestRecord[], t: RawTest) => {
+      const id = t.id || t.createdAt || ''
       if (!seen.has(id)) {
         seen.add(id)
         acc.push({
@@ -858,7 +845,7 @@ export default function DashboardPage() {
     }, []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }, [testData, sigmaData])
 
-  const stats = useMemo(() => computeStats(tasks, allTests, sigmaData, data?.performance), [tasks, allTests, sigmaData, data])
+  const stats = useMemo(() => computeStats(tasks, allTests, (sigmaData as {score?:number;date?:string}[] | null) ?? [], data?.performance ?? null), [tasks, allTests, sigmaData, data])
 
   useEffect(() => {
     if (!localStorage.getItem('accessToken')) { router.push('/login'); return }
@@ -955,7 +942,7 @@ export default function DashboardPage() {
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const newTasks: DailyTask[] = parsed.map((t: any, n: number) => ({ ...t, id: `${uid}-${today}-${n}`, completed: false, date: today, phase: phase.phase }))
+          const newTasks: DailyTask[] = (parsed as Partial<DailyTask>[]).map((t, n) => ({ ...t, id: `${uid}-${today}-${n}`, completed: false, date: today, phase: phase.phase } as DailyTask))
           setTasks(prev => { const merged = [...prev.filter(t => t.date !== today), ...newTasks]; saveTasks(uid, merged); return merged })
           toast.success(`${phase.phase} tasks ready!`, { icon: '📋' })
           setLoading(false); return
@@ -1142,9 +1129,9 @@ export default function DashboardPage() {
                 <div className="stat-lbl"><span style={{ color: item.color }}>{item.icon}</span>{item.label}</div>
                 <div className="stat-val">{item.value}</div>
                 {item.sub && <div className="stat-sub">{item.sub}</div>}
-                {(item as any).prog !== undefined && (
+                {typeof (item as {prog?:number}).prog !== 'undefined' && (
                   <div className="prog-track">
-                    <div className="prog-fill" style={{ width: `${(item as any).prog}%`, background: `linear-gradient(90deg,${item.color}70,${item.color})`, boxShadow: `0 0 6px ${item.color}40` }} />
+                    <div className="prog-fill" style={{ width: `${(item as {prog:number}).prog}%`, background: `linear-gradient(90deg,${item.color}70,${item.color})`, boxShadow: `0 0 6px ${item.color}40` }} />
                   </div>
                 )}
               </div>
@@ -1158,7 +1145,7 @@ export default function DashboardPage() {
             <LeaderboardPanel userId={userId} profile={profile} />
           </div>
 
-          {/* ─── BOTTOM ROW — responsive via .bottom-row class ─── */}
+          {/* BOTTOM ROW */}
           <div className="bottom-row">
 
             {/* Daily Performance */}
@@ -1176,7 +1163,7 @@ export default function DashboardPage() {
                         <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,.04)" vertical={false} />
                         <XAxis dataKey="n" tick={{ fill: '#374151', fontSize: 7 }} axisLine={false} tickLine={false} />
                         <YAxis domain={[0, 100]} tick={{ fill: '#374151', fontSize: 7 }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ background: '#060810', border: '1px solid rgba(0,200,255,.2)', borderRadius: 7, fontSize: 11 }} formatter={(v: any) => [`${v}%`, 'Score']} />
+                        <Tooltip contentStyle={{ background: '#060810', border: '1px solid rgba(0,200,255,.2)', borderRadius: 7, fontSize: 11 }} formatter={(v: number) => [`${v}%`, 'Score']} />
                         <Area type="monotone" dataKey="s" stroke="#00c8ff" strokeWidth={2} fill="url(#pg)" dot={{ fill: '#00c8ff', r: 3 }} />
                       </AreaChart>
                     </ResponsiveContainer>
