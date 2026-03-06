@@ -6,6 +6,7 @@ const compression = require('compression');
 const morgan      = require('morgan');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ── CORS ──────────────────────────────────────────────────────────
 const allowedOrigins = process.env.CLIENT_URL === '*'
