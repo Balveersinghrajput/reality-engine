@@ -3,18 +3,15 @@ import api from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, Award, Bookmark, BookOpen, Brain, Calendar,
-  CheckCircle,
+  ArrowLeft, Award, Bookmark, BookOpen, Brain, Calendar, CheckCircle,
   ExternalLink, Film, Flame, Github, Globe, Heart, Image,
-  Linkedin, MessageCircle, MessageSquare, Play, Plus,
-  Send, Star,
+  Linkedin, MessageCircle, MessageSquare, Play, Plus, Send, Star,
   Target, TrendingUp, UserCheck, UserPlus, Users, UserX, X, Zap
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 
-/* ── Tier ─────────────────────────────────────────── */
 const TIER: Record<string, { color: string; glow: string; label: string }> = {
   developing:  { color: '#6b7280', glow: 'rgba(107,114,128,.3)',  label: 'Developing'  },
   rising:      { color: '#22c55e', glow: 'rgba(34,197,94,.3)',    label: 'Rising'      },
@@ -23,7 +20,6 @@ const TIER: Record<string, { color: string; glow: string; label: string }> = {
   legendary:   { color: '#fbbf24', glow: 'rgba(251,191,36,.3)',   label: 'Legendary'   },
 }
 
-/* ── Badges ───────────────────────────────────────── */
 const BADGES = [
   { id: 'first_post', icon: '📸', label: 'First Post',    color: '#22c55e', desc: 'Shared first update' },
   { id: 'streak_7',   icon: '🔥', label: '7-Day Streak',  color: '#f97316', desc: 'Consistent for a week' },
@@ -35,37 +31,28 @@ const BADGES = [
   { id: 'legendary',  icon: '👑', label: 'Legendary',     color: '#fbbf24', desc: 'Legendary tier' },
 ]
 
-/* ══════════════════════════════════════════════════
-   STORY VIEWER
-══════════════════════════════════════════════════ */
 function StoryViewer({ highlights, startIdx, onClose }: { highlights: any[]; startIdx: number; onClose: () => void }) {
   const [idx, setIdx] = useState(startIdx)
   const [progress, setProgress] = useState(0)
   const ref = useRef<any>(null)
   const DURATION = 5000
   const cur = highlights[idx]
-
   useEffect(() => {
     setProgress(0)
     const t0 = Date.now()
     ref.current = setInterval(() => {
       const pct = Math.min(((Date.now() - t0) / DURATION) * 100, 100)
       setProgress(pct)
-      if (pct >= 100) {
-        clearInterval(ref.current)
-        idx < highlights.length - 1 ? setIdx(i => i + 1) : onClose()
-      }
+      if (pct >= 100) { clearInterval(ref.current); idx < highlights.length - 1 ? setIdx(i => i + 1) : onClose() }
     }, 30)
     return () => clearInterval(ref.current)
   }, [idx])
-
   const go = (d: 'prev' | 'next') => {
     clearInterval(ref.current)
     if (d === 'prev' && idx > 0) setIdx(i => i - 1)
     else if (d === 'next' && idx < highlights.length - 1) setIdx(i => i + 1)
     else onClose()
   }
-
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ position: 'absolute', top: 16, left: 16, right: 16, display: 'flex', gap: 4, zIndex: 10 }}>
@@ -82,8 +69,7 @@ function StoryViewer({ highlights, startIdx, onClose }: { highlights: any[]; sta
           : <div style={{ width: '100%', height: '100vh', background: 'linear-gradient(135deg,#0f172a,#1e1b4b)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <Star size={64} color="#4338ca" />
               <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', textAlign: 'center', padding: '0 32px', fontFamily: 'Syne,sans-serif' }}>{cur.title}</p>
-            </div>
-        }
+            </div>}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent,rgba(0,0,0,.85))', padding: '60px 24px 40px' }}>
           <h3 style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 6, fontFamily: 'Syne,sans-serif' }}>{cur.title}</h3>
           {cur.description && <p style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', lineHeight: 1.6, marginBottom: 14 }}>{cur.description}</p>}
@@ -98,9 +84,6 @@ function StoryViewer({ highlights, startIdx, onClose }: { highlights: any[]; sta
   )
 }
 
-/* ══════════════════════════════════════════════════
-   ACTIVITY HEATMAP
-══════════════════════════════════════════════════ */
 function ActivityHeatmap({ posts, tier }: { posts: any[]; tier: { color: string } }) {
   const weeks = useMemo(() => {
     const today = new Date()
@@ -114,44 +97,32 @@ function ActivityHeatmap({ posts, tier }: { posts: any[]; tier: { color: string 
     for (let i = 0; i < days.length; i += 7) r.push(days.slice(i, i + 7))
     return r
   }, [posts])
-
   const max = Math.max(...weeks.flat().map(d => d.count), 1)
   const getColor = (c: number) => c === 0 ? '#111' : `${tier.color}${Math.round((0.2 + (c / max) * 0.8) * 255).toString(16).padStart(2, '0')}`
-
   return (
     <div style={{ background: '#080808', border: '1px solid #111', borderRadius: 16, padding: '18px 20px', marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <TrendingUp size={13} color={tier.color} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#e5e7eb', fontFamily: 'Syne,sans-serif' }}>Activity</span>
-        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TrendingUp size={13} color={tier.color} /><span style={{ fontSize: 12, fontWeight: 700, color: '#e5e7eb', fontFamily: 'Syne,sans-serif' }}>Activity</span></div>
         <span style={{ fontSize: 10, color: '#404040', fontFamily: 'monospace' }}>{posts.length} posts this year</span>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ display: 'flex', gap: 2, minWidth: 'max-content' }}>
           {weeks.map((week, wi) => (
             <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {week.map((day, di) => (
-                <div key={di} title={`${day.date}: ${day.count} post${day.count !== 1 ? 's' : ''}`} style={{ width: 11, height: 11, borderRadius: 2, background: getColor(day.count), flexShrink: 0 }} />
-              ))}
+              {week.map((day, di) => <div key={di} title={`${day.date}: ${day.count}`} style={{ width: 11, height: 11, borderRadius: 2, background: getColor(day.count), flexShrink: 0 }} />)}
             </div>
           ))}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, justifyContent: 'flex-end' }}>
         <span style={{ fontSize: 9, color: '#404040', fontFamily: 'monospace' }}>Less</span>
-        {[0, 0.25, 0.5, 0.75, 1].map((v, i) => (
-          <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: v === 0 ? '#111' : `${tier.color}${Math.round((0.2 + v * 0.8) * 255).toString(16).padStart(2, '0')}` }} />
-        ))}
+        {[0, 0.25, 0.5, 0.75, 1].map((v, i) => <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: v === 0 ? '#111' : `${tier.color}${Math.round((0.2 + v * 0.8) * 255).toString(16).padStart(2, '0')}` }} />)}
         <span style={{ fontSize: 9, color: '#404040', fontFamily: 'monospace' }}>More</span>
       </div>
     </div>
   )
 }
 
-/* ══════════════════════════════════════════════════
-   BADGES (read-only for public view)
-══════════════════════════════════════════════════ */
 function BadgesSection({ xp, posts, friends, tasks, tests, tier: tierStr }: { xp: number; posts: any[]; friends: any[]; tasks: number; tests: number; tier: string }) {
   const earned = BADGES.filter(b => {
     if (b.id === 'first_post') return posts.length > 0
@@ -164,7 +135,6 @@ function BadgesSection({ xp, posts, friends, tasks, tests, tier: tierStr }: { xp
     if (b.id === 'legendary')  return tierStr === 'legendary'
     return false
   }).map(b => b.id)
-
   return (
     <div style={{ background: '#080808', border: '1px solid #111', borderRadius: 16, padding: '18px 20px', marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -189,18 +159,13 @@ function BadgesSection({ xp, posts, friends, tasks, tests, tier: tierStr }: { xp
   )
 }
 
-/* ══════════════════════════════════════════════════
-   POST MODAL
-══════════════════════════════════════════════════ */
 function PostModal({ post, onClose, onLike, profile, tier }: { post: any; onClose: () => void; onLike: (id: string) => void; profile: any; tier: any }) {
   const [comments, setComments] = useState<any[]>([])
   const [commentText, setCommentText] = useState('')
   const [loading, setLoading] = useState(true)
-
   useEffect(() => {
     api.get(`/user/posts/${post.id}/comments`).then(r => setComments(r.data.data || [])).catch(() => {}).finally(() => setLoading(false))
   }, [post.id])
-
   const sendComment = async () => {
     if (!commentText.trim()) return
     try {
@@ -209,7 +174,6 @@ function PostModal({ post, onClose, onLike, profile, tier }: { post: any; onClos
       setComments(r.data.data || []); setCommentText('')
     } catch { toast.error('Failed to comment') }
   }
-
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(8px,3vw,16px)', backdropFilter: 'blur(8px)' }}>
       <div style={{ background: '#000', border: '1px solid #262626', borderRadius: 4, display: 'flex', width: '100%', maxWidth: 920, maxHeight: '94vh', overflow: 'hidden', position: 'relative' }}>
@@ -235,18 +199,14 @@ function PostModal({ post, onClose, onLike, profile, tier }: { post: any; onClos
               : comments.length === 0 ? <p style={{ color: '#737373', fontSize: 12 }}>No comments yet.</p>
               : comments.map(c => (
                 <div key={c.id} style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(59,130,246,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#3b82f6', flexShrink: 0 }}>
-                    {(c.user?.username || 'U')[0].toUpperCase()}
-                  </div>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(59,130,246,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#3b82f6', flexShrink: 0 }}>{(c.user?.username || 'U')[0].toUpperCase()}</div>
                   <p style={{ fontSize: 12, color: '#fff', lineHeight: 1.6, fontFamily: 'Syne,sans-serif' }}><span style={{ fontWeight: 700, marginRight: 6 }}>{c.user?.username}</span>{c.content}</p>
                 </div>
               ))}
           </div>
           <div style={{ borderTop: '1px solid #262626', padding: '10px 16px', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-              <button onClick={() => onLike(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <Heart size={20} fill={post.liked ? '#ef4444' : 'none'} color={post.liked ? '#ef4444' : '#737373'} />
-              </button>
+              <button onClick={() => onLike(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Heart size={20} fill={post.liked ? '#ef4444' : 'none'} color={post.liked ? '#ef4444' : '#737373'} /></button>
               <MessageCircle size={20} color="#737373" />
               <Send size={20} color="#737373" style={{ transform: 'rotate(20deg)' }} />
             </div>
@@ -262,9 +222,6 @@ function PostModal({ post, onClose, onLike, profile, tier }: { post: any; onClos
   )
 }
 
-/* ══════════════════════════════════════════════════
-   ADD HIGHLIGHT MODAL
-══════════════════════════════════════════════════ */
 function AddHighlightModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data: any, file?: File) => void }) {
   const [form, setForm] = useState({ title: '', link: '', description: '' })
   const [file, setFile] = useState<File | null>(null)
@@ -289,18 +246,13 @@ function AddHighlightModal({ onClose, onAdd }: { onClose: () => void; onAdd: (da
         ))}
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '11px', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, color: '#555', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Cancel</button>
-          <button onClick={() => { if (!form.title || !form.link) { toast.error('Title and link required'); return }; onAdd(form, file || undefined) }} style={{ flex: 1, padding: '11px', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.35)', borderRadius: 10, color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Plus size={14} /> Add
-          </button>
+          <button onClick={() => { if (!form.title || !form.link) { toast.error('Title and link required'); return }; onAdd(form, file || undefined) }} style={{ flex: 1, padding: '11px', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.35)', borderRadius: 10, color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Plus size={14} /> Add</button>
         </div>
       </div>
     </div>
   )
 }
 
-/* ══════════════════════════════════════════════════
-   POST COMPOSER
-══════════════════════════════════════════════════ */
 function PostComposer({ user, onPosted }: { user: any; onPosted: () => void }) {
   const [content, setContent] = useState('')
   const [mediaFile, setMediaFile] = useState<File | null>(null)
@@ -350,9 +302,6 @@ function PostComposer({ user, onPosted }: { user: any; onPosted: () => void }) {
   )
 }
 
-/* ══════════════════════════════════════════════════
-   MAIN — PUBLIC PROFILE PAGE
-══════════════════════════════════════════════════ */
 export default function PublicProfilePage() {
   const router = useRouter()
   const params = useParams()
@@ -369,24 +318,34 @@ export default function PublicProfilePage() {
 
   useEffect(() => { setTimeout(() => setMounted(true), 80) }, [])
 
+  // ✅ FIX: staleTime prevents stale flash on refresh
   const { data: profile, isLoading } = useQuery({
     queryKey: ['public-profile', username],
     queryFn: () => api.get(`/user/${username}/public`).then(r => r.data.data),
     enabled: !!username,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   })
 
-  const isOwnProfile = !!(user && (user.username === username || (profile?.id && user.id === profile.id)))
+  // ✅ FIX: Case-insensitive isOwnProfile check — "Rajput" === "rajput" now works
+  const isOwnProfile = !!(user && (
+    user.username?.toLowerCase() === username?.toLowerCase() ||
+    (profile?.id && user.id === profile.id)
+  ))
 
   const { data: connectionStatus, refetch: refetchStatus } = useQuery({
     queryKey: ['conn-status', profile?.id],
     queryFn: () => api.get(`/connections/status/${profile?.id}`).then(r => r.data.data).catch(() => ({ status: null, connectionId: null })),
     enabled: !!profile?.id && !isOwnProfile,
+    staleTime: 30_000,
   })
 
   const { data: friendsData } = useQuery({
     queryKey: ['public-friends', profile?.id],
     queryFn: () => api.get(`/user/${profile?.username}/friends`).then(r => r.data.data).catch(() => []),
     enabled: !!profile?.id && (connectionStatus?.status === 'accepted' || isOwnProfile),
+    staleTime: 60_000,
   })
 
   const sendRequest = useMutation({
@@ -433,13 +392,16 @@ export default function PublicProfilePage() {
     </div>
   )
 
-  if (!profile) return (
+  // ✅ FIX: Only show "not found" after loading is complete
+  if (!isLoading && !profile) return (
     <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
       <div style={{ fontSize: 48 }}>👤</div>
       <p style={{ color: '#525252', fontSize: 14 }}>User not found</p>
       <button onClick={() => router.back()} style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>← Go back</button>
     </div>
   )
+
+  if (!profile) return null
 
   const tier = TIER[profile?.tier] || TIER.developing
   const status = connectionStatus?.status
@@ -453,8 +415,8 @@ export default function PublicProfilePage() {
   const connBtn = (() => {
     if (isOwnProfile) return null
     if (status === 'accepted')         return { icon: UserCheck, label: 'Connected',      color: '#22c55e', bg: 'rgba(34,197,94,.1)',   border: 'rgba(34,197,94,.3)',   action: () => removeConnection.mutate(), disabled: removeConnection.isPending }
-    if (status === 'pending_sent')     return { icon: UserX,    label: 'Request Sent',   color: '#f97316', bg: 'rgba(249,115,22,.1)', border: 'rgba(249,115,22,.3)', action: () => {},                         disabled: true }
-    if (status === 'pending_received') return { icon: UserCheck, label: 'Accept Request', color: '#3b82f6', bg: 'rgba(59,130,246,.1)', border: 'rgba(59,130,246,.3)', action: () => acceptRequest.mutate(),     disabled: acceptRequest.isPending }
+    if (status === 'pending_sent')     return { icon: UserX,     label: 'Request Sent',   color: '#f97316', bg: 'rgba(249,115,22,.1)', border: 'rgba(249,115,22,.3)', action: () => {},                        disabled: true }
+    if (status === 'pending_received') return { icon: UserCheck, label: 'Accept Request', color: '#3b82f6', bg: 'rgba(59,130,246,.1)', border: 'rgba(59,130,246,.3)', action: () => acceptRequest.mutate(),    disabled: acceptRequest.isPending }
     return { icon: UserPlus, label: 'Add Friend', color: '#3b82f6', bg: 'rgba(59,130,246,.1)', border: 'rgba(59,130,246,.3)', action: () => sendRequest.mutate(), disabled: sendRequest.isPending }
   })()
 
@@ -476,24 +438,19 @@ export default function PublicProfilePage() {
         ::-webkit-scrollbar{width:3px;height:3px} ::-webkit-scrollbar-thumb{background:#1a1a1a;border-radius:2px}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-
         .pub-root{min-height:100vh;background:#000}
         .pub-wrap{max-width:935px;margin:0 auto;padding:clamp(12px,3vw,36px) clamp(0px,2vw,24px) 100px}
-
         .pub-hero{background:linear-gradient(160deg,#0a0a0a,#050505);border:1px solid #111;border-radius:clamp(0px,2vw,20px);padding:clamp(16px,3vw,24px) clamp(14px,3vw,24px);margin-bottom:8px;position:relative;overflow:hidden;animation:fadeUp .4s ease both}
         .pub-layout{display:flex;gap:clamp(14px,3vw,22px);align-items:flex-start}
         .pub-avatar{width:clamp(72px,10vw,96px);height:clamp(72px,10vw,96px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:clamp(24px,4vw,34px);font-weight:900;overflow:hidden;flex-shrink:0}
         .pub-body{flex:1;min-width:0}
         .pub-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
         .pub-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
-
         .pub-stats{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px}
         .pub-stat{background:#080808;border:1px solid #111;border-radius:12px;padding:clamp(10px,2vw,14px) 6px;text-align:center;transition:background .2s}
         .pub-stat:hover{background:#0f0f0f}
-
         .pub-ranks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
         .pub-rank{background:#080808;border:1px solid #111;border-radius:16px;padding:clamp(12px,2vw,16px);position:relative;overflow:hidden}
-
         .hl-row{display:flex;gap:clamp(14px,3vw,22px);overflow-x:auto;padding:8px 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;align-items:flex-start;margin-bottom:0;border-bottom:1px solid #111;padding-bottom:20px}
         .hl-row::-webkit-scrollbar{display:none}
         .hl-bwrap{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer}
@@ -501,12 +458,10 @@ export default function PublicProfilePage() {
         .hl-bring:hover{transform:scale(1.05)}
         .hl-binner{width:100%;height:100%;border-radius:50%;border:2.5px solid #000;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#111}
         .hl-blabel{font-size:11px;color:#a3a3a3;text-align:center;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
         .pub-tabs{display:flex;border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a;margin-bottom:2px}
         .pub-tab{flex:1;padding:clamp(10px,2vw,14px) 0;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:clamp(11px,1.5vw,13px);font-weight:600;font-family:'Syne',sans-serif;border-top:2px solid transparent;margin-top:-1px;transition:all .2s;color:#525252}
         .pub-tab.active{color:#fff;border-top-color:#fff}
         .pub-tab:hover:not(.active){color:#a3a3a3}
-
         .posts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px}
         .post-tile{aspect-ratio:1;position:relative;overflow:hidden;cursor:pointer;background:#0a0a0a}
         .post-tile img,.post-tile video{width:100%;height:100%;object-fit:cover;display:block}
@@ -514,18 +469,15 @@ export default function PublicProfilePage() {
         .post-tile:hover .post-tile-overlay{opacity:1}
         .post-tile-stat{display:flex;align-items:center;gap:5px;color:#fff;font-size:14px;font-weight:700}
         .post-tile-text{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:12px;text-align:center;font-size:11px;color:#737373;line-height:1.5;background:#0d0d0d}
-
         .fr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
         .fr-card{background:#080808;border:1px solid #111;border-radius:14px;padding:14px 16px;cursor:pointer;transition:background .2s,transform .2s;display:flex;align-items:center;gap:12px}
         .fr-card:hover{background:#0f0f0f;transform:translateY(-2px)}
-
         .hl-bwrap:hover .hl-del{opacity:1!important}
-
         @media(max-width:900px){.pub-stats{grid-template-columns:repeat(3,1fr)}}
         @media(max-width:700px){.pub-wrap{padding:14px 12px 90px}.fr-grid{grid-template-columns:repeat(2,1fr)}}
         @media(max-width:540px){
           .pub-wrap{padding:0 0 80px}
-          .pub-hero{border-radius:0;border-left:none;border-right:none;margin-bottom:0;padding:14px 14px}
+          .pub-hero{border-radius:0;border-left:none;border-right:none;margin-bottom:0;padding:14px}
           .pub-stats{grid-template-columns:repeat(3,1fr);gap:4px}
           .pub-stat{border-radius:0;border-left:none;border-right:none}
           .pub-ranks{grid-template-columns:repeat(3,1fr)!important;gap:4px;padding:0 10px}
@@ -545,7 +497,6 @@ export default function PublicProfilePage() {
         @media(min-width:1200px){.pub-wrap{padding:36px 24px 100px}.fr-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}}
       `}</style>
 
-      {/* Modals */}
       {activePost && <PostModal post={activePost} onClose={() => setActivePost(null)} onLike={likePost} profile={profile} tier={tier} />}
       {story && <StoryViewer highlights={story.highlights} startIdx={story.startIdx} onClose={() => setStory(null)} />}
       {addingHighlight && isOwnProfile && <AddHighlightModal onClose={() => setAddingHighlight(false)} onAdd={addHighlight} />}
@@ -564,18 +515,14 @@ export default function PublicProfilePage() {
       <div className="pub-root" style={{ opacity: mounted ? 1 : 0, transition: 'opacity .4s ease' }}>
         <div className="pub-wrap">
 
-          {/* Back */}
           <button onClick={() => router.back()} style={{ width: 36, height: 36, borderRadius: 10, background: '#0a0a0a', border: '1px solid #1a1a1a', color: '#525252', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 18 }}>
             <ArrowLeft size={16} />
           </button>
 
-          {/* HERO */}
           <div className="pub-hero">
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg,transparent,${tier.color}60,transparent)` }} />
             <div style={{ position: 'absolute', top: -80, right: -80, width: 220, height: 220, borderRadius: '50%', background: `radial-gradient(circle,${tier.glow},transparent 70%)`, pointerEvents: 'none', opacity: .4 }} />
-
             <div className="pub-layout" style={{ position: 'relative' }}>
-              {/* Avatar with tier ring */}
               <div style={{ flexShrink: 0 }}>
                 <div style={{ padding: 2, borderRadius: '50%', background: `conic-gradient(${tier.color},${tier.color}40,${tier.color})` }}>
                   <div style={{ padding: 2, borderRadius: '50%', background: '#000' }}>
@@ -585,7 +532,6 @@ export default function PublicProfilePage() {
                   </div>
                 </div>
               </div>
-
               <div className="pub-body">
                 <div className="pub-top">
                   <div>
@@ -614,12 +560,11 @@ export default function PublicProfilePage() {
                   </div>
                 </div>
 
-                {/* Inline counts */}
                 <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, marginBottom: 14, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 14, overflow: 'hidden' }}>
                   {[
-                    { label: 'Posts',       value: posts.length,                          color: '#e5e7eb' },
-                    { label: 'Connections', value: friends.length,                        color: '#e5e7eb' },
-                    { label: 'XP',          value: (profile?.xp || 0).toLocaleString(),  color: '#fbbf24' },
+                    { label: 'Posts',       value: posts.length,                         color: '#e5e7eb' },
+                    { label: 'Connections', value: friends.length,                       color: '#e5e7eb' },
+                    { label: 'XP',          value: (profile?.xp || 0).toLocaleString(), color: '#fbbf24' },
                   ].map((s, i, arr) => (
                     <div key={s.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 6px', borderRight: i < arr.length - 1 ? '1px solid #1a1a1a' : 'none', gap: 3 }}>
                       <span style={{ fontSize: 'clamp(15px,3vw,19px)', fontWeight: 900, color: s.color, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1, letterSpacing: '-0.5px' }}>{s.value}</span>
@@ -629,14 +574,12 @@ export default function PublicProfilePage() {
                 </div>
 
                 {profile?.bio && <p style={{ fontSize: 13, color: '#a3a3a3', lineHeight: 1.7, marginBottom: 10 }}>{profile.bio}</p>}
-
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
                   {[{ url: profile?.githubUrl, Icon: Github, label: 'GitHub', color: '#e5e7eb' }, { url: profile?.linkedinUrl, Icon: Linkedin, label: 'LinkedIn', color: '#3b82f6' }, { url: profile?.portfolioUrl, Icon: Globe, label: 'Portfolio', color: '#22c55e' }].filter(l => l.url).map(l => (
                     <a key={l.label} href={l.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: 8, color: l.color, fontSize: 10, fontWeight: 700, textDecoration: 'none', fontFamily: 'monospace' }}><l.Icon size={11} /> {l.label}</a>
                   ))}
                   {profile?.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#404040', fontFamily: 'monospace' }}><Calendar size={10} />{new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>}
                 </div>
-
                 {skills.length > 0 && (
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {skills.slice(0, 12).map(sk => <span key={sk} style={{ padding: '3px 10px', background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.16)', borderRadius: 100, fontSize: 10, color: '#93c5fd', fontFamily: 'monospace' }}>{sk}</span>)}
@@ -647,7 +590,6 @@ export default function PublicProfilePage() {
             </div>
           </div>
 
-          {/* STATS */}
           <div className="pub-stats" style={{ marginBottom: 8 }}>
             {stats.map((s, i) => (
               <div key={i} className="pub-stat" style={{ borderColor: `${s.color}15` }}>
@@ -658,7 +600,6 @@ export default function PublicProfilePage() {
             ))}
           </div>
 
-          {/* RANKS */}
           <div className="pub-ranks">
             {[
               { label: 'Batch Rank',    rank: profile?.batchRank,    total: profile?.batchTotal,        color: '#22c55e', sub: profile?.batchCode || 'Batch', icon: Users },
@@ -679,17 +620,13 @@ export default function PublicProfilePage() {
             ))}
           </div>
 
-          {/* HEATMAP — always visible */}
           <ActivityHeatmap posts={posts} tier={tier} />
 
-          {/* HIGHLIGHTS — Story-style bubbles */}
           {(highlights.length > 0 || isOwnProfile) && (
             <div className="hl-row">
               {isOwnProfile && (
                 <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, cursor: 'pointer' }} onClick={() => setAddingHighlight(true)}>
-                  <button style={{ width: 'clamp(66px,11vw,88px)', height: 'clamp(66px,11vw,88px)', borderRadius: '50%', background: 'transparent', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', flexShrink: 0 }}>
-                    <Plus size={24} />
-                  </button>
+                  <button style={{ width: 'clamp(66px,11vw,88px)', height: 'clamp(66px,11vw,88px)', borderRadius: '50%', background: 'transparent', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', flexShrink: 0 }}><Plus size={24} /></button>
                   <span style={{ fontSize: 11, color: '#e5e7eb', fontFamily: 'Syne,sans-serif' }}>New</span>
                 </div>
               )}
@@ -701,9 +638,8 @@ export default function PublicProfilePage() {
                     </div>
                   </div>
                   {isOwnProfile && (
-                    <button onClick={e => { e.stopPropagation(); deleteHighlight(hl.id) }}
-                      style={{ position: 'absolute', top: 0, right: 0, width: 20, height: 20, borderRadius: '50%', background: '#1a1a1a', border: '2px solid #000', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, opacity: 0, transition: 'opacity .2s' }}
-                      className="hl-del">
+                    <button onClick={e => { e.stopPropagation(); deleteHighlight(hl.id) }} className="hl-del"
+                      style={{ position: 'absolute', top: 0, right: 0, width: 20, height: 20, borderRadius: '50%', background: '#1a1a1a', border: '2px solid #000', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, opacity: 0, transition: 'opacity .2s' }}>
                       <X size={9} />
                     </button>
                   )}
@@ -713,7 +649,6 @@ export default function PublicProfilePage() {
             </div>
           )}
 
-          {/* NOT CONNECTED GATE */}
           {!canSeeDetails && !isOwnProfile && (
             <div style={{ background: '#080808', border: '1px solid #1a1a1a', borderRadius: 16, padding: 'clamp(20px,4vw,28px) 24px', textAlign: 'center', marginTop: 12 }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
@@ -727,15 +662,14 @@ export default function PublicProfilePage() {
             </div>
           )}
 
-          {/* TABS + CONTENT */}
           {canSeeDetails && (
             <>
               <div className="pub-tabs">
                 {([
-                  { key: 'posts',   icon: BookOpen, label: 'Posts',    count: posts.length },
+                  { key: 'posts',   icon: BookOpen, label: 'Posts',   count: posts.length },
                   ...(isOwnProfile ? [{ key: 'saved' as const, icon: Bookmark, label: 'Saved', count: savedPosts.length }] : []),
-                  { key: 'badges',  icon: Award,    label: 'Badges',   count: BADGES.length },
-                  { key: 'friends', icon: Users,    label: 'Friends',  count: friends.length },
+                  { key: 'badges',  icon: Award,    label: 'Badges',  count: BADGES.length },
+                  { key: 'friends', icon: Users,    label: 'Friends', count: friends.length },
                 ] as const).map(t => (
                   <button key={t.key} className={`pub-tab${activeTab === t.key ? ' active' : ''}`} onClick={() => setActiveTab(t.key as any)}>
                     <t.icon size={16} />
@@ -745,17 +679,12 @@ export default function PublicProfilePage() {
                 ))}
               </div>
 
-              {/* POSTS */}
               {activeTab === 'posts' && (
                 posts.length === 0
                   ? <div style={{ textAlign: 'center', padding: 'clamp(40px,8vw,60px) 0', borderTop: '1px solid #1a1a1a' }}>
                       <BookOpen size={36} style={{ color: '#1a1a1a', display: 'block', margin: '0 auto 12px' }} />
                       <p style={{ color: '#a3a3a3', fontSize: 15, fontWeight: 700, marginBottom: 6 }}>No posts yet</p>
-                      {isOwnProfile && (
-                        <button onClick={() => setShowComposer(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: '#1a1a1a', border: '1px solid #262626', borderRadius: 12, color: '#e5e7eb', cursor: 'pointer', fontSize: 13, fontWeight: 700, marginTop: 12 }}>
-                          <Plus size={15} /> Create first post
-                        </button>
-                      )}
+                      {isOwnProfile && <button onClick={() => setShowComposer(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: '#1a1a1a', border: '1px solid #262626', borderRadius: 12, color: '#e5e7eb', cursor: 'pointer', fontSize: 13, fontWeight: 700, marginTop: 12 }}><Plus size={15} /> Create first post</button>}
                     </div>
                   : <>
                       {isOwnProfile && (
@@ -765,16 +694,13 @@ export default function PublicProfilePage() {
                               <button key={v} onClick={() => setPostView(v)} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: postView === v ? '#1a1a1a' : 'transparent', border: `1px solid ${postView === v ? '#262626' : 'transparent'}`, borderRadius: 8, color: postView === v ? '#fff' : '#525252', cursor: 'pointer', fontSize: 14 }}>{icon}</button>
                             ))}
                           </div>
-                          <button onClick={() => setShowComposer(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#1a1a1a', border: '1px solid #262626', borderRadius: 10, color: '#e5e7eb', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'Syne,sans-serif' }}>
-                            <Plus size={13} /> New Post
-                          </button>
+                          <button onClick={() => setShowComposer(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#1a1a1a', border: '1px solid #262626', borderRadius: 10, color: '#e5e7eb', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'Syne,sans-serif' }}><Plus size={13} /> New Post</button>
                         </div>
                       )}
                       <div className="posts-grid">
                         {posts.map((post: any) => (
                           <div key={post.id} className="post-tile" onClick={() => setActivePost(post)}>
-                            {post.videoUrl
-                              ? <><video src={post.videoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted /><div style={{ position: 'absolute', top: 8, right: 8, color: '#fff' }}><Play size={14} fill="#fff" /></div></>
+                            {post.videoUrl ? <><video src={post.videoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted /><div style={{ position: 'absolute', top: 8, right: 8, color: '#fff' }}><Play size={14} fill="#fff" /></div></>
                               : post.imageUrl ? <img src={post.imageUrl} alt="" /> : <div className="post-tile-text">{post.content}</div>}
                             <div className="post-tile-overlay">
                               <div className="post-tile-stat"><Heart size={16} fill="#fff" color="#fff" /> {post.likes}</div>
@@ -787,13 +713,11 @@ export default function PublicProfilePage() {
                     </>
               )}
 
-              {/* SAVED — own profile only */}
               {activeTab === 'saved' && isOwnProfile && (
                 savedPosts.length === 0
                   ? <div style={{ textAlign: 'center', padding: 'clamp(40px,8vw,60px) 0', borderTop: '1px solid #1a1a1a' }}>
                       <Bookmark size={36} style={{ color: '#1a1a1a', display: 'block', margin: '0 auto 12px' }} />
                       <p style={{ color: '#a3a3a3', fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Nothing saved yet</p>
-                      <p style={{ color: '#525252', fontSize: 12 }}>Bookmark posts to save them here</p>
                     </div>
                   : <div className="posts-grid">
                       {savedPosts.map((post: any) => (
@@ -809,14 +733,12 @@ export default function PublicProfilePage() {
                     </div>
               )}
 
-              {/* BADGES */}
               {activeTab === 'badges' && (
                 <div style={{ paddingTop: 12 }}>
                   <BadgesSection xp={profile?.xp || 0} posts={posts} friends={friends} tasks={profile?._count?.tasks || 0} tests={profile?._count?.testResults || 0} tier={profile?.tier || 'developing'} />
                 </div>
               )}
 
-              {/* FRIENDS */}
               {activeTab === 'friends' && (
                 friends.length === 0
                   ? <div style={{ textAlign: 'center', padding: 'clamp(40px,8vw,60px) 0' }}>
