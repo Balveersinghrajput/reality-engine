@@ -38,7 +38,8 @@ async function getDashboard(req, res, next) {
 async function getPublicProfile(req, res, next) {
   try {
     const { username } = req.params;
-    const data = await userService.getPublicProfile(username, req.user.id);
+    const viewerId = req.user?.id || null; // optional — null for guests
+    const data = await userService.getPublicProfile(username, viewerId);
     return successResponse(res, data, 'Public profile fetched');
   } catch (err) {
     if (err.message?.includes('not found')) return errorResponse(res, err.message, 404);
@@ -46,7 +47,6 @@ async function getPublicProfile(req, res, next) {
   }
 }
 
-// ✅ NEW: Get public friends list for a username
 async function getUserFriends(req, res, next) {
   try {
     const { username } = req.params;
@@ -137,7 +137,7 @@ module.exports = {
   updateProfilePic,
   getDashboard,
   getPublicProfile,
-  getUserFriends,       // ✅ NEW
+  getUserFriends,
   createPost,
   getMyPosts,
   deletePost,
