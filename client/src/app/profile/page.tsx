@@ -12,7 +12,6 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 
-/* ── Types ─────────────────────────────────────────── */
 interface Friend { id: string; username: string; tier: string; targetTrack: string; profilePic?: string }
 interface Highlight { id: string; title: string; imageUrl?: string; link: string; description: string }
 interface Post {
@@ -21,7 +20,6 @@ interface Post {
   user?: { username: string; profilePic?: string; tier?: string }
 }
 
-/* ── Tier ─────────────────────────────────────────── */
 const TIER: Record<string, { color: string; glow: string; label: string }> = {
   developing:  { color: '#6b7280', glow: 'rgba(107,114,128,.3)',  label: 'Developing'  },
   rising:      { color: '#22c55e', glow: 'rgba(34,197,94,.3)',    label: 'Rising'      },
@@ -30,52 +28,41 @@ const TIER: Record<string, { color: string; glow: string; label: string }> = {
   legendary:   { color: '#fbbf24', glow: 'rgba(251,191,36,.3)',   label: 'Legendary'   },
 }
 
-/* ── Badges ───────────────────────────────────────── */
 const BADGES = [
-  { id: 'first_post', icon: '📸', label: 'First Post',    desc: 'Shared your first update',       color: '#22c55e' },
-  { id: 'streak_7',   icon: '🔥', label: '7-Day Streak',  desc: 'Consistent for a week',           color: '#f97316' },
-  { id: 'streak_30',  icon: '⚡', label: '30-Day Streak', desc: 'A month of daily grind',          color: '#fbbf24' },
-  { id: 'top_10',     icon: '🏆', label: 'Top 10',        desc: 'Platform top 10',                 color: '#a78bfa' },
-  { id: 'networker',  icon: '🤝', label: 'Networker',     desc: 'Connected with 10+ people',       color: '#3b82f6' },
-  { id: 'centurion',  icon: '💯', label: 'Centurion',     desc: '100 tasks completed',              color: '#ef4444' },
-  { id: 'scholar',    icon: '🧠', label: 'Scholar',       desc: '50 test assessments',              color: '#06b6d4' },
-  { id: 'legendary',  icon: '👑', label: 'Legendary',     desc: 'Reached Legendary tier',          color: '#fbbf24' },
+  { id: 'first_post', icon: '📸', label: 'First Post',    desc: 'Shared your first update',  color: '#22c55e' },
+  { id: 'streak_7',   icon: '🔥', label: '7-Day Streak',  desc: 'Consistent for a week',      color: '#f97316' },
+  { id: 'streak_30',  icon: '⚡', label: '30-Day Streak', desc: 'A month of daily grind',     color: '#fbbf24' },
+  { id: 'top_10',     icon: '🏆', label: 'Top 10',        desc: 'Platform top 10',            color: '#a78bfa' },
+  { id: 'networker',  icon: '🤝', label: 'Networker',     desc: 'Connected with 10+ people',  color: '#3b82f6' },
+  { id: 'centurion',  icon: '💯', label: 'Centurion',     desc: '100 tasks completed',        color: '#ef4444' },
+  { id: 'scholar',    icon: '🧠', label: 'Scholar',       desc: '50 test assessments',        color: '#06b6d4' },
+  { id: 'legendary',  icon: '👑', label: 'Legendary',     desc: 'Reached Legendary tier',     color: '#fbbf24' },
 ]
 
-/* ══════════════════════════════════════════════════
-   STORY VIEWER
-══════════════════════════════════════════════════ */
 function StoryViewer({ highlights, startIdx, onClose }: { highlights: Highlight[]; startIdx: number; onClose: () => void }) {
   const [idx, setIdx] = useState(startIdx)
   const [progress, setProgress] = useState(0)
   const ref = useRef<any>(null)
   const DURATION = 5000
   const cur = highlights[idx]
-
   useEffect(() => {
     setProgress(0)
     const t0 = Date.now()
     ref.current = setInterval(() => {
       const pct = Math.min(((Date.now() - t0) / DURATION) * 100, 100)
       setProgress(pct)
-      if (pct >= 100) {
-        clearInterval(ref.current)
-        idx < highlights.length - 1 ? setIdx(i => i + 1) : onClose()
-      }
+      if (pct >= 100) { clearInterval(ref.current); idx < highlights.length - 1 ? setIdx(i => i + 1) : onClose() }
     }, 30)
     return () => clearInterval(ref.current)
   }, [idx])
-
   const go = (d: 'prev' | 'next') => {
     clearInterval(ref.current)
     if (d === 'prev' && idx > 0) setIdx(i => i - 1)
     else if (d === 'next' && idx < highlights.length - 1) setIdx(i => i + 1)
     else onClose()
   }
-
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {/* progress bars */}
       <div style={{ position: 'absolute', top: 16, left: 16, right: 16, display: 'flex', gap: 4, zIndex: 10 }}>
         {highlights.map((_, i) => (
           <div key={i} style={{ flex: 1, height: 2, background: 'rgba(255,255,255,.25)', borderRadius: 2, overflow: 'hidden' }}>
@@ -90,8 +77,7 @@ function StoryViewer({ highlights, startIdx, onClose }: { highlights: Highlight[
           : <div style={{ width: '100%', height: '100vh', background: 'linear-gradient(135deg,#0f172a,#1e1b4b)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <Star size={64} color="#4338ca" />
               <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', textAlign: 'center', padding: '0 32px', fontFamily: 'Syne, sans-serif' }}>{cur.title}</p>
-            </div>
-        }
+            </div>}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent,rgba(0,0,0,.85))', padding: '60px 24px 40px' }}>
           <h3 style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 6, fontFamily: 'Syne, sans-serif' }}>{cur.title}</h3>
           {cur.description && <p style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', lineHeight: 1.6, marginBottom: 14 }}>{cur.description}</p>}
@@ -106,9 +92,6 @@ function StoryViewer({ highlights, startIdx, onClose }: { highlights: Highlight[
   )
 }
 
-/* ══════════════════════════════════════════════════
-   ACTIVITY HEATMAP
-══════════════════════════════════════════════════ */
 function ActivityHeatmap({ posts, tier }: { posts: Post[]; tier: { color: string } }) {
   const weeks = useMemo(() => {
     const today = new Date()
@@ -122,48 +105,32 @@ function ActivityHeatmap({ posts, tier }: { posts: Post[]; tier: { color: string
     for (let i = 0; i < days.length; i += 7) r.push(days.slice(i, i + 7))
     return r
   }, [posts])
-
   const max = Math.max(...weeks.flat().map(d => d.count), 1)
-  const getColor = (c: number) => {
-    if (!c) return '#111'
-    return `${tier.color}${Math.round((0.2 + (c / max) * 0.8) * 255).toString(16).padStart(2, '0')}`
-  }
-
+  const getColor = (c: number) => !c ? '#111' : `${tier.color}${Math.round((0.2 + (c / max) * 0.8) * 255).toString(16).padStart(2, '0')}`
   return (
     <div style={{ background: '#080808', border: '1px solid #111', borderRadius: 16, padding: '18px 20px', marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <TrendingUp size={13} color={tier.color} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#e5e7eb', fontFamily: 'Syne, sans-serif' }}>Activity</span>
-        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TrendingUp size={13} color={tier.color} /><span style={{ fontSize: 12, fontWeight: 700, color: '#e5e7eb', fontFamily: 'Syne, sans-serif' }}>Activity</span></div>
         <span style={{ fontSize: 10, color: '#404040', fontFamily: 'monospace' }}>{posts.length} posts this year</span>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <div style={{ display: 'flex', gap: 2, minWidth: 'max-content' }}>
           {weeks.map((week, wi) => (
             <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {week.map((day, di) => (
-                <div key={di} title={`${day.date}: ${day.count} post${day.count !== 1 ? 's' : ''}`}
-                  style={{ width: 11, height: 11, borderRadius: 2, background: getColor(day.count), flexShrink: 0 }} />
-              ))}
+              {week.map((day, di) => <div key={di} title={`${day.date}: ${day.count}`} style={{ width: 11, height: 11, borderRadius: 2, background: getColor(day.count), flexShrink: 0 }} />)}
             </div>
           ))}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, justifyContent: 'flex-end' }}>
         <span style={{ fontSize: 9, color: '#404040', fontFamily: 'monospace' }}>Less</span>
-        {[0, 0.25, 0.5, 0.75, 1].map((v, i) => (
-          <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: v === 0 ? '#111' : `${tier.color}${Math.round((0.2 + v * 0.8) * 255).toString(16).padStart(2, '0')}` }} />
-        ))}
+        {[0, 0.25, 0.5, 0.75, 1].map((v, i) => <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: v === 0 ? '#111' : `${tier.color}${Math.round((0.2 + v * 0.8) * 255).toString(16).padStart(2, '0')}` }} />)}
         <span style={{ fontSize: 9, color: '#404040', fontFamily: 'monospace' }}>More</span>
       </div>
     </div>
   )
 }
 
-/* ══════════════════════════════════════════════════
-   BADGES SECTION
-══════════════════════════════════════════════════ */
 function BadgesSection({ xp, posts, friends, tasks, tests, tier }: { xp: number; posts: Post[]; friends: any[]; tasks: number; tests: number; tier: string }) {
   const earned = BADGES.filter(b => {
     if (b.id === 'first_post') return posts.length > 0
@@ -176,7 +143,6 @@ function BadgesSection({ xp, posts, friends, tasks, tests, tier }: { xp: number;
     if (b.id === 'legendary')  return tier === 'legendary'
     return false
   }).map(b => b.id)
-
   return (
     <div style={{ background: '#080808', border: '1px solid #111', borderRadius: 16, padding: '18px 20px', marginBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -201,9 +167,6 @@ function BadgesSection({ xp, posts, friends, tasks, tests, tier }: { xp: number;
   )
 }
 
-/* ══════════════════════════════════════════════════
-   POST MODAL
-══════════════════════════════════════════════════ */
 function PostModal({ post, isOwn, onClose, onLike, onBookmark, onDelete, username, profilePic, tier }: {
   post: Post; isOwn: boolean; onClose: () => void
   onLike: (id: string) => void; onBookmark: (id: string) => void; onDelete: (id: string) => void
@@ -213,11 +176,9 @@ function PostModal({ post, isOwn, onClose, onLike, onBookmark, onDelete, usernam
   const [commentText, setCommentText] = useState('')
   const [loading, setLoading] = useState(true)
   const tc = TIER[tier] || TIER.developing
-
   useEffect(() => {
     api.get(`/user/posts/${post.id}/comments`).then(r => setComments(r.data.data || [])).catch(() => {}).finally(() => setLoading(false))
   }, [post.id])
-
   const sendComment = async () => {
     if (!commentText.trim()) return
     try {
@@ -226,19 +187,16 @@ function PostModal({ post, isOwn, onClose, onLike, onBookmark, onDelete, usernam
       setComments(r.data.data || []); setCommentText('')
     } catch { toast.error('Failed to comment') }
   }
-
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose() }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(8px,3vw,16px)', backdropFilter: 'blur(8px)' }}>
       <div style={{ background: '#000', border: '1px solid #262626', borderRadius: 4, display: 'flex', width: '100%', maxWidth: 920, maxHeight: '94vh', overflow: 'hidden', position: 'relative' }}>
         <button onClick={onClose} style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, background: 'rgba(0,0,0,.5)', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}><X size={16} /></button>
-        {/* Media */}
         <div style={{ flex: '0 0 55%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 340, maxHeight: '94vh', overflow: 'hidden' }}>
           {post.videoUrl ? <video src={post.videoUrl} controls autoPlay style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '94vh' }} />
             : post.imageUrl ? <img src={post.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '94vh' }} />
             : <div style={{ padding: 32, textAlign: 'center' }}><p style={{ fontSize: 16, color: '#e5e7eb', lineHeight: 1.8, fontFamily: 'Syne, sans-serif' }}>{post.content}</p></div>}
         </div>
-        {/* Info */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #262626', overflow: 'hidden' }}>
           <div style={{ padding: '14px 16px', borderBottom: '1px solid #262626', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -252,42 +210,27 @@ function PostModal({ post, isOwn, onClose, onLike, onBookmark, onDelete, usernam
             </div>
             {isOwn && <button onClick={() => { onDelete(post.id); onClose() }} style={{ background: 'none', border: 'none', color: '#737373', cursor: 'pointer' }}><Trash2 size={15} /></button>}
           </div>
-          {post.content && (
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid #1a1a1a', flexShrink: 0 }}>
-              <p style={{ fontSize: 13, color: '#e5e7eb', lineHeight: 1.7, fontFamily: 'Syne, sans-serif' }}>
-                <span style={{ fontWeight: 700, color: '#fff', marginRight: 6 }}>{username}</span>{post.content}
-              </p>
-            </div>
-          )}
+          {post.content && <div style={{ padding: '12px 16px', borderBottom: '1px solid #1a1a1a', flexShrink: 0 }}><p style={{ fontSize: 13, color: '#e5e7eb', lineHeight: 1.7, fontFamily: 'Syne, sans-serif' }}><span style={{ fontWeight: 700, color: '#fff', marginRight: 6 }}>{username}</span>{post.content}</p></div>}
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
             {loading ? <p style={{ color: '#737373', fontSize: 12 }}>Loading…</p>
               : comments.length === 0 ? <p style={{ color: '#737373', fontSize: 12 }}>No comments yet.</p>
               : comments.map(c => (
                 <div key={c.id} style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#3b82f6', flexShrink: 0 }}>
-                    {(c.user?.username || 'U')[0].toUpperCase()}
-                  </div>
-                  <p style={{ fontSize: 12, color: '#fff', lineHeight: 1.6, fontFamily: 'Syne, sans-serif' }}>
-                    <span style={{ fontWeight: 700, marginRight: 6 }}>{c.user?.username}</span>{c.content}
-                  </p>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#3b82f6', flexShrink: 0 }}>{(c.user?.username || 'U')[0].toUpperCase()}</div>
+                  <p style={{ fontSize: 12, color: '#fff', lineHeight: 1.6, fontFamily: 'Syne, sans-serif' }}><span style={{ fontWeight: 700, marginRight: 6 }}>{c.user?.username}</span>{c.content}</p>
                 </div>
               ))}
           </div>
           <div style={{ borderTop: '1px solid #262626', padding: '10px 16px', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-              <button onClick={() => onLike(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <Heart size={20} fill={post.liked ? '#ef4444' : 'none'} color={post.liked ? '#ef4444' : '#737373'} />
-              </button>
+              <button onClick={() => onLike(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Heart size={20} fill={post.liked ? '#ef4444' : 'none'} color={post.liked ? '#ef4444' : '#737373'} /></button>
               <MessageCircle size={20} color="#737373" />
               <Send size={20} color="#737373" style={{ transform: 'rotate(20deg)' }} />
-              <button onClick={() => onBookmark(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-                <Bookmark size={20} fill={post.bookmarked ? '#fff' : 'none'} color={post.bookmarked ? '#fff' : '#737373'} />
-              </button>
+              <button onClick={() => onBookmark(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', display: 'flex', alignItems: 'center' }}><Bookmark size={20} fill={post.bookmarked ? '#fff' : 'none'} color={post.bookmarked ? '#fff' : '#737373'} /></button>
             </div>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 10, fontFamily: 'Syne, sans-serif' }}>{post.likes.toLocaleString()} likes</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendComment()} placeholder="Add a comment…"
-                style={{ flex: 1, background: 'transparent', border: 'none', color: '#e5e7eb', fontSize: 13, outline: 'none', fontFamily: 'Syne, sans-serif' }} />
+              <input value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendComment()} placeholder="Add a comment…" style={{ flex: 1, background: 'transparent', border: 'none', color: '#e5e7eb', fontSize: 13, outline: 'none', fontFamily: 'Syne, sans-serif' }} />
               <button onClick={sendComment} disabled={!commentText.trim()} style={{ background: 'none', border: 'none', color: commentText.trim() ? '#3b82f6' : '#1e3a5f', cursor: commentText.trim() ? 'pointer' : 'default', fontSize: 12, fontWeight: 700, fontFamily: 'Syne, sans-serif' }}>Post</button>
             </div>
           </div>
@@ -297,9 +240,6 @@ function PostModal({ post, isOwn, onClose, onLike, onBookmark, onDelete, usernam
   )
 }
 
-/* ══════════════════════════════════════════════════
-   EDIT MODAL
-══════════════════════════════════════════════════ */
 function EditModal({ data, onClose, onSave }: { data: any; onClose: () => void; onSave: (d: any) => void }) {
   const [form, setForm] = useState({ bio: data?.bio || '', githubUrl: data?.githubUrl || '', linkedinUrl: data?.linkedinUrl || '', portfolioUrl: data?.portfolioUrl || '', skills: (data?.skills || []).join(', ') })
   return (
@@ -320,25 +260,18 @@ function EditModal({ data, onClose, onSave }: { data: any; onClose: () => void; 
             <label style={{ display: 'block', fontSize: 10, color: '#555', marginBottom: 5, fontFamily: 'monospace', letterSpacing: 1, textTransform: 'uppercase' }}>{f.label}</label>
             {f.multiline
               ? <textarea value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} rows={3} style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '10px 12px', color: '#e5e7eb', fontSize: 13, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'Syne, sans-serif' }} />
-              : <input value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '10px 12px', color: '#e5e7eb', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'Syne, sans-serif' }} />
-            }
+              : <input value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '10px 12px', color: '#e5e7eb', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'Syne, sans-serif' }} />}
           </div>
         ))}
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '11px', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, color: '#555', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Cancel</button>
-          <button onClick={() => onSave({ ...form, skills: form.skills.split(',').map((s: string) => s.trim()).filter(Boolean) })}
-            style={{ flex: 1, padding: '11px', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.35)', borderRadius: 10, color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Save size={14} /> Save
-          </button>
+          <button onClick={() => onSave({ ...form, skills: form.skills.split(',').map((s: string) => s.trim()).filter(Boolean) })} style={{ flex: 1, padding: '11px', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.35)', borderRadius: 10, color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Save size={14} /> Save</button>
         </div>
       </div>
     </div>
   )
 }
 
-/* ══════════════════════════════════════════════════
-   ADD HIGHLIGHT MODAL
-══════════════════════════════════════════════════ */
 function AddHighlightModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data: any, file?: File) => void }) {
   const [form, setForm] = useState({ title: '', link: '', description: '' })
   const [file, setFile] = useState<File | null>(null)
@@ -367,18 +300,13 @@ function AddHighlightModal({ onClose, onAdd }: { onClose: () => void; onAdd: (da
         ))}
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '11px', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, color: '#555', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Cancel</button>
-          <button onClick={() => { if (!form.title || !form.link) { toast.error('Title and link required'); return }; onAdd(form, file || undefined) }} style={{ flex: 1, padding: '11px', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.35)', borderRadius: 10, color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Plus size={14} /> Add
-          </button>
+          <button onClick={() => { if (!form.title || !form.link) { toast.error('Title and link required'); return }; onAdd(form, file || undefined) }} style={{ flex: 1, padding: '11px', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.35)', borderRadius: 10, color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Plus size={14} /> Add</button>
         </div>
       </div>
     </div>
   )
 }
 
-/* ══════════════════════════════════════════════════
-   POST COMPOSER
-══════════════════════════════════════════════════ */
 function PostComposer({ user, onPosted }: { user: any; onPosted: () => void }) {
   const [content, setContent] = useState('')
   const [mediaFile, setMediaFile] = useState<File | null>(null)
@@ -429,9 +357,6 @@ function PostComposer({ user, onPosted }: { user: any; onPosted: () => void }) {
   )
 }
 
-/* ══════════════════════════════════════════════════
-   MAIN — MY PROFILE PAGE
-══════════════════════════════════════════════════ */
 export default function ProfilePage() {
   const router = useRouter()
   const { user } = useAuthStore()
@@ -448,9 +373,29 @@ export default function ProfilePage() {
 
   useEffect(() => { setTimeout(() => setMounted(true), 80) }, [])
 
-  const { data: profileRaw, isLoading } = useQuery({ queryKey: ['my-profile'], queryFn: () => api.get('/user/profile').then(r => r.data.data) })
-  const { data: rankData } = useQuery({ queryKey: ['my-rank'], queryFn: () => api.get('/leaderboard/my-rank').then(r => r.data.data).catch(() => null) })
-  const { data: friendsRaw } = useQuery({ queryKey: ['my-friends'], queryFn: () => api.get('/connections?status=accepted&limit=50').then(r => r.data.data).catch(() => []) })
+  // ✅ FIX 1: Only fetch when user is authenticated
+  // ✅ FIX 2: staleTime prevents stale flash on refresh
+  const { data: profileRaw, isLoading } = useQuery({
+    queryKey: ['my-profile'],
+    queryFn: () => api.get('/user/profile').then(r => r.data.data),
+    enabled: !!user,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const { data: rankData } = useQuery({
+    queryKey: ['my-rank'],
+    queryFn: () => api.get('/leaderboard/my-rank').then(r => r.data.data).catch(() => null),
+    enabled: !!user,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const { data: friendsRaw } = useQuery({
+    queryKey: ['my-friends'],
+    queryFn: () => api.get('/connections?status=accepted&limit=50').then(r => r.data.data).catch(() => []),
+    enabled: !!user,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
 
   const saveMutation = useMutation({
     mutationFn: (d: any) => api.patch('/user/profile', d),
@@ -479,7 +424,8 @@ export default function ProfilePage() {
     catch { toast.error('Failed to delete') }
   }
 
-  if (isLoading) return (
+  // ✅ FIX 3: Show loader while auth is hydrating OR profile is fetching
+  if (!user || isLoading) return (
     <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid #1a1a1a', borderTopColor: '#3b82f6', animation: 'spin .8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -499,12 +445,12 @@ export default function ProfilePage() {
   }).filter(Boolean)
 
   const stats = [
-    { label: 'XP',      value: (p?.xp || 0).toLocaleString(),              color: '#fbbf24', icon: Zap },
-    { label: 'Mastery', value: `${Math.round(p?.masteryPercent || 0)}%`,    color: '#22c55e', icon: Brain },
-    { label: 'Streak',  value: `${p?.streakCurrent || 0}d`,                 color: '#fb923c', icon: Flame },
-    { label: 'Tasks',   value: p?._count?.tasks || 0,                       color: '#3b82f6', icon: CheckCircle },
-    { label: 'Tests',   value: p?._count?.testResults || 0,                 color: '#a78bfa', icon: Target },
-    { label: 'Rank',    value: `#${rankData?.platformRank || '—'}`,         color: '#ef4444', icon: Trophy },
+    { label: 'XP',      value: (p?.xp || 0).toLocaleString(),           color: '#fbbf24', icon: Zap },
+    { label: 'Mastery', value: `${Math.round(p?.masteryPercent || 0)}%`, color: '#22c55e', icon: Brain },
+    { label: 'Streak',  value: `${p?.streakCurrent || 0}d`,              color: '#fb923c', icon: Flame },
+    { label: 'Tasks',   value: p?._count?.tasks || 0,                    color: '#3b82f6', icon: CheckCircle },
+    { label: 'Tests',   value: p?._count?.testResults || 0,              color: '#a78bfa', icon: Target },
+    { label: 'Rank',    value: `#${rankData?.platformRank || '—'}`,      color: '#ef4444', icon: Trophy },
   ]
 
   return (
@@ -516,10 +462,8 @@ export default function ProfilePage() {
         ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-thumb{background:#1a1a1a;border-radius:2px}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-
         .pf-root{min-height:100vh;background:#000}
         .pf-wrap{max-width:935px;margin:0 auto;padding:clamp(12px,3vw,40px) clamp(0px,2vw,24px) 100px}
-
         .hero-card{background:linear-gradient(160deg,#0a0a0a,#050505);border:1px solid #111;border-radius:clamp(0px,2vw,20px);padding:clamp(16px,3vw,28px) clamp(14px,3vw,24px);margin-bottom:8px;position:relative;overflow:hidden;animation:fadeUp .4s ease both}
         .hero-layout{display:flex;gap:clamp(14px,3vw,24px);align-items:flex-start}
         .hero-avatar-wrap{flex-shrink:0;position:relative}
@@ -532,14 +476,11 @@ export default function ProfilePage() {
         .hero-bio{font-size:13px;color:#a3a3a3;line-height:1.7;margin-bottom:10px}
         .hero-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
         .hero-skills{display:flex;gap:5px;flex-wrap:wrap}
-
         .stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px}
         .stat-card{background:#080808;border:1px solid #111;border-radius:12px;padding:clamp(10px,2vw,14px) 6px;text-align:center;transition:background .2s}
         .stat-card:hover{background:#0f0f0f}
-
         .ranks-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
         .rank-card{background:#080808;border:1px solid #111;border-radius:16px;padding:clamp(12px,2vw,16px);position:relative;overflow:hidden}
-
         .hl-row-wrap{margin-bottom:0;border-bottom:1px solid #111;padding-bottom:20px}
         .hl-row{display:flex;gap:clamp(14px,3vw,22px);overflow-x:auto;padding:8px 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;align-items:flex-start}
         .hl-row::-webkit-scrollbar{display:none}
@@ -553,12 +494,10 @@ export default function ProfilePage() {
         .hl-bubble-inner{width:100%;height:100%;border-radius:50%;border:2.5px solid #000;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#111}
         .hl-bubble-label{font-size:11px;color:#a3a3a3;text-align:center;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .hl-bubble-wrap:hover .hl-del-btn{opacity:1!important}
-
         .tabs-row{display:flex;border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a;margin-bottom:2px}
         .tab-btn{flex:1;padding:clamp(10px,2vw,14px) 0;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:clamp(11px,1.5vw,13px);font-weight:600;font-family:'Syne',sans-serif;border-top:2px solid transparent;margin-top:-1px;transition:all .2s;color:#525252}
         .tab-btn.active{color:#fff;border-top-color:#fff}
         .tab-btn:hover:not(.active){color:#a3a3a3}
-
         .posts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px}
         .posts-list{display:flex;flex-direction:column;gap:12px;padding:12px 0}
         .post-tile{aspect-ratio:1;position:relative;overflow:hidden;cursor:pointer;background:#0a0a0a}
@@ -571,13 +510,10 @@ export default function ProfilePage() {
         .post-list-card:hover{background:#0d0d0d}
         .post-list-card img,.post-list-card video{width:100%;max-height:360px;object-fit:cover;display:block}
         .post-list-body{padding:12px 14px}
-
         .fr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
         .fr-card{background:#080808;border:1px solid #111;border-radius:14px;padding:14px 16px;cursor:pointer;transition:background .2s,transform .2s;display:flex;align-items:center;gap:12px}
         .fr-card:hover{background:#0f0f0f;transform:translateY(-2px)}
-
         .skill-pill{padding:3px 10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.16);border-radius:100px;font-size:10px;color:#93c5fd;font-family:'IBM Plex Mono',monospace}
-
         @media(max-width:900px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
         @media(max-width:700px){.pf-wrap{padding:14px 12px 90px}.fr-grid{grid-template-columns:repeat(2,1fr)}}
         @media(max-width:540px){
@@ -603,7 +539,6 @@ export default function ProfilePage() {
         @media(min-width:1200px){.fr-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}}
       `}</style>
 
-      {/* Modals */}
       {activePost && <PostModal post={activePost} isOwn onClose={() => setActivePost(null)} onLike={likePost} onBookmark={bookmarkPost} onDelete={id => { deletePostMutation.mutate(id); setActivePost(null) }} username={p?.username} profilePic={p?.profilePic} tier={p?.tier || 'developing'} />}
       {story && <StoryViewer highlights={story.highlights} startIdx={story.startIdx} onClose={() => setStory(null)} />}
       {editingProfile && <EditModal data={p} onClose={() => setEditingProfile(false)} onSave={d => saveMutation.mutate(d)} />}
@@ -612,12 +547,10 @@ export default function ProfilePage() {
       <div className="pf-root" style={{ opacity: mounted ? 1 : 0, transition: 'opacity .4s ease' }}>
         <div className="pf-wrap">
 
-          {/* HERO */}
           <div className="hero-card">
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg,transparent,${tier.color}60,transparent)` }} />
             <div style={{ position: 'absolute', top: -80, right: -80, width: 220, height: 220, borderRadius: '50%', background: `radial-gradient(circle,${tier.glow},transparent 70%)`, pointerEvents: 'none', opacity: .5 }} />
             <div className="hero-layout" style={{ position: 'relative' }}>
-              {/* Avatar */}
               <div className="hero-avatar-wrap">
                 <div style={{ padding: 2, borderRadius: '50%', background: `conic-gradient(${tier.color},${tier.color}40,${tier.color})` }}>
                   <div style={{ padding: 2, borderRadius: '50%', background: '#000' }}>
@@ -635,7 +568,6 @@ export default function ProfilePage() {
                 }} />
               </div>
 
-              {/* Body */}
               <div className="hero-body">
                 <div className="hero-top">
                   <div>
@@ -652,13 +584,12 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Inline stats */}
                 <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, marginBottom: 14, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 14, overflow: 'hidden' }}>
                   {[
-                    { label: 'Posts',       value: posts.length,                                color: '#e5e7eb' },
-                    { label: 'Connections', value: friends.length,                              color: '#e5e7eb' },
-                    { label: 'Rank',        value: `#${rankData?.platformRank || '—'}`,        color: '#a78bfa' },
-                    { label: 'Score',       value: Math.round(p?.realityScore || 0),            color: '#ef4444' },
+                    { label: 'Posts',       value: posts.length,                           color: '#e5e7eb' },
+                    { label: 'Connections', value: friends.length,                         color: '#e5e7eb' },
+                    { label: 'Rank',        value: `#${rankData?.platformRank || '—'}`,   color: '#a78bfa' },
+                    { label: 'Score',       value: Math.round(p?.realityScore || 0),       color: '#ef4444' },
                   ].map((s, i, arr) => (
                     <div key={s.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', borderRight: i < arr.length - 1 ? '1px solid #1a1a1a' : 'none', gap: 3 }}>
                       <span style={{ fontSize: 'clamp(13px,2.5vw,17px)', fontWeight: 900, color: s.color, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1, letterSpacing: '-0.5px' }}>{s.value}</span>
@@ -679,13 +610,11 @@ export default function ProfilePage() {
 
                 {skills.length > 0
                   ? <div className="hero-skills">{skills.slice(0, 14).map(sk => <span key={sk} className="skill-pill">{sk}</span>)}{skills.length > 14 && <span style={{ fontSize: 10, color: '#404040', padding: '2px 6px' }}>+{skills.length - 14}</span>}</div>
-                  : <button onClick={() => setEditingProfile(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#404040', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'monospace' }}><Code2 size={10} /> + Add skills</button>
-                }
+                  : <button onClick={() => setEditingProfile(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#404040', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'monospace' }}><Code2 size={10} /> + Add skills</button>}
               </div>
             </div>
           </div>
 
-          {/* STATS */}
           <div className="stats-grid" style={{ marginBottom: 8 }}>
             {stats.map((s, i) => (
               <div key={i} className="stat-card" style={{ borderColor: `${s.color}15` }}>
@@ -696,7 +625,6 @@ export default function ProfilePage() {
             ))}
           </div>
 
-          {/* RANKS */}
           <div className="ranks-grid" style={{ marginBottom: 12 }}>
             {[
               { label: 'Batch Rank',    rank: rankData?.batchRank,    total: rankData?.batchTotal,        color: '#22c55e', sub: rankData?.batchCode || 'Your batch', icon: Users },
@@ -717,10 +645,8 @@ export default function ProfilePage() {
             ))}
           </div>
 
-          {/* HEATMAP */}
           <ActivityHeatmap posts={posts} tier={tier} />
 
-          {/* HIGHLIGHTS */}
           <div className="hl-row-wrap">
             <div className="hl-row">
               <div className="hl-new-wrap" onClick={() => setAddingHighlight(true)}>
@@ -744,7 +670,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* TABS */}
           <div className="tabs-row">
             {([
               { key: 'posts',   icon: BookOpen, label: 'Posts',       count: posts.length },
@@ -760,7 +685,6 @@ export default function ProfilePage() {
             ))}
           </div>
 
-          {/* POSTS TAB */}
           {activeTab === 'posts' && (
             <div>
               {posts.length === 0 ? (
@@ -829,7 +753,6 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* SAVED TAB */}
           {activeTab === 'saved' && (
             <div>
               {savedPosts.length === 0 ? (
@@ -840,62 +763,28 @@ export default function ProfilePage() {
                   <p style={{ color: '#404040', fontSize: 11, fontFamily: 'monospace' }}>Only you can see your saved posts</p>
                 </div>
               ) : (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0 8px', borderBottom: '1px solid #111', marginBottom: 2 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Bookmark size={13} color="#fbbf24" />
-                      <span style={{ fontSize: 12, color: '#737373', fontFamily: 'monospace' }}>{savedPosts.length} saved post{savedPosts.length !== 1 ? 's' : ''}</span>
+                <div className="posts-grid">
+                  {savedPosts.map(post => (
+                    <div key={post.id} className="post-tile" onClick={() => setActivePost(post)}>
+                      {post.videoUrl ? <video src={post.videoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted /> : post.imageUrl ? <img src={post.imageUrl} alt="" /> : <div className="post-tile-text">{post.content}</div>}
+                      <div className="post-tile-overlay">
+                        <div className="post-tile-stat"><Heart size={16} fill="#fff" color="#fff" /> {post.likes}</div>
+                        <div className="post-tile-stat"><MessageCircle size={16} fill="#fff" color="#fff" /> {post.comments}</div>
+                      </div>
+                      <div style={{ position: 'absolute', top: 6, left: 6 }}><Bookmark size={13} fill="#fbbf24" color="#fbbf24" /></div>
                     </div>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {([{ v: 'grid', Icon: Grid }, { v: 'list', Icon: List }] as const).map(({ v, Icon }) => (
-                        <button key={v} onClick={() => setPostView(v as any)} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: postView === v ? '#1a1a1a' : 'transparent', border: `1px solid ${postView === v ? '#262626' : 'transparent'}`, borderRadius: 8, color: postView === v ? '#fff' : '#525252', cursor: 'pointer' }}><Icon size={14} /></button>
-                      ))}
-                    </div>
-                  </div>
-                  {postView === 'grid' ? (
-                    <div className="posts-grid">
-                      {savedPosts.map(post => (
-                        <div key={post.id} className="post-tile" onClick={() => setActivePost(post)}>
-                          {post.videoUrl ? <><video src={post.videoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted /></> : post.imageUrl ? <img src={post.imageUrl} alt="" /> : <div className="post-tile-text">{post.content}</div>}
-                          <div className="post-tile-overlay">
-                            <div className="post-tile-stat"><Heart size={16} fill="#fff" color="#fff" /> {post.likes}</div>
-                            <div className="post-tile-stat"><MessageCircle size={16} fill="#fff" color="#fff" /> {post.comments}</div>
-                          </div>
-                          <div style={{ position: 'absolute', top: 6, left: 6 }}><Bookmark size={13} fill="#fbbf24" color="#fbbf24" /></div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="posts-list">
-                      {savedPosts.map(post => (
-                        <div key={post.id} className="post-list-card" onClick={() => setActivePost(post)}>
-                          {post.imageUrl && <img src={post.imageUrl} alt="" />}
-                          {post.videoUrl && <video src={post.videoUrl} muted style={{ width: '100%', maxHeight: 300, objectFit: 'cover', display: 'block' }} />}
-                          <div className="post-list-body">
-                            {post.content && <p style={{ fontSize: 14, color: '#e5e7eb', lineHeight: 1.6, marginBottom: 10, fontFamily: 'Syne, sans-serif' }}>{post.content}</p>}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#737373' }}><Heart size={13} color={post.liked ? '#ef4444' : '#737373'} fill={post.liked ? '#ef4444' : 'none'} /> {post.likes}</span>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#737373' }}><MessageCircle size={13} /> {post.comments}</span>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#fbbf24', marginLeft: 'auto' }}><Bookmark size={11} fill="#fbbf24" color="#fbbf24" /> Saved</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
+                  ))}
+                </div>
               )}
             </div>
           )}
 
-          {/* BADGES TAB */}
           {activeTab === 'badges' && (
             <div style={{ paddingTop: 12 }}>
               <BadgesSection xp={p?.xp || 0} posts={posts} friends={friends} tasks={p?._count?.tasks || 0} tests={p?._count?.testResults || 0} tier={p?.tier || 'developing'} />
             </div>
           )}
 
-          {/* FRIENDS TAB */}
           {activeTab === 'friends' && (
             <div style={{ paddingTop: 16 }}>
               {friends.length > 0 ? (
