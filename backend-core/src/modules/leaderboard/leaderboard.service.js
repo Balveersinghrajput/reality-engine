@@ -31,14 +31,6 @@ async function groupByTaskResults(args) {
   }
 }
 
-async function findManyTaskResults(args) {
-  try {
-    return await prisma.taskResults.findMany(args)
-  } catch {
-    return await prisma.taskResult.findMany(args)
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────
 // buildLeaderboard
 // ─────────────────────────────────────────────────────────────────
@@ -90,28 +82,23 @@ async function buildLeaderboard(requestingUserId, userIds) {
     }])
   )
 
-  // 3. Active days (consistency)
-  let allResults = []
-  try {
-    allResults = await findManyTaskResults({
-      where:  { userId: { in: userIds }, completedAt: { gte: thirtyDaysAgo } },
-      select: { userId: true, completedAt: true },
-    })
-  } catch (e) {
-    console.warn('[leaderboard] allResults failed:', e.message)
-  }
-
-  const activeDaysMap = {}
-  for (const r of allResults) {
-    const day = r.completedAt.toISOString().split('T')[0]
-    if (!activeDaysMap[r.userId]) activeDaysMap[r.userId] = new Set()
-    activeDaysMap[r.userId].add(day)
-  }
+  // 3. Active days (consistency) — computed in the DB with a single aggregation query
+  //    instead of fetching every row and iterating in JavaScript
+  const activeDaysRows = await prisma.$queryRaw`
+    SELECT "userId", COUNT(DISTINCT DATE("completedAt"))::int AS "activeDays"
+    FROM "TaskResult"
+    WHERE "userId" = ANY(${userIds}::text[])
+      AND "completedAt" >= ${thirtyDaysAgo}
+    GROUP BY "userId"
+  `;
+  const activeDaysMap = Object.fromEntries(
+    activeDaysRows.map(r => [r.userId, Number(r.activeDays)])
+  );
 
   // 4. Build entries
   const entries = users.map(u => {
     const tests       = testMap[u.id] || { avg: 0, best: 0, count: 0, xp: 0 }
-    const activeDays  = activeDaysMap[u.id]?.size ?? 0
+    const activeDays  = activeDaysMap[u.id] ?? 0
     const mastery     = u.masteryPercent ?? 0
     const consistency = Math.min((activeDays / 30) * 100, 100)
     const score       = perfScore(tests.avg, mastery, consistency)

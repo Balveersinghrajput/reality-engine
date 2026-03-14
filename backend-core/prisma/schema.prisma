@@ -243,6 +243,7 @@ model Connection {
 
   @@unique([senderId, receiverId])
   @@index([receiverId, status])
+  @@index([senderId, status])
 }
 
 model Group {
@@ -422,6 +423,8 @@ model TaskResult {
 
   @@index([userId])
   @@index([completedAt])
+  @@index([userId, completedAt])
+  @@index([userId, challengeTitle])
 }
 
 model Post {

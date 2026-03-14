@@ -185,13 +185,12 @@ async function getTaskStats(userId) {
 
 // ── Internal: Update Mastery ──────────────────
 async function updateMastery(userId) {
-  const tasks = await prisma.task.findMany({
-    where:  { userId },
-    select: { status: true },
-  });
+  // Use COUNT queries instead of fetching every task row just to count them
+  const [total, completed] = await Promise.all([
+    prisma.task.count({ where: { userId } }),
+    prisma.task.count({ where: { userId, status: 'completed' } }),
+  ]);
 
-  const total     = tasks.length;
-  const completed = tasks.filter(t => t.status === 'completed').length;
   const mastery   = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   await prisma.user.update({
