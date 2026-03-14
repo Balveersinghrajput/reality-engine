@@ -59,7 +59,8 @@ function formatPosts(posts, viewerId) {
     createdAt: p.createdAt,
     likes:     p._count?.likes    || 0,
     comments:  p._count?.comments || 0,
-    liked:     Array.isArray(p.likes) ? p.likes.length > 0 : false,
+    liked:     Array.isArray(p.likes)     ? p.likes.length     > 0 : false,
+    bookmarked: Array.isArray(p.bookmarks) ? p.bookmarks.length > 0 : false,
     user: p.user
       ? { username: p.user.username, profilePic: p.user.profilePic || null, tier: p.user.tier }
       : null,
@@ -71,7 +72,8 @@ function postSelect(viewerId) {
     id: true, content: true, imageUrl: true, videoUrl: true, createdAt: true,
     user: { select: { username: true, profilePic: true, tier: true } },
     _count: { select: { likes: true, comments: true } },
-    likes:  { where: { userId: viewerId }, select: { id: true } },
+    likes:     { where: { userId: viewerId }, select: { id: true } },
+    bookmarks: { where: { userId: viewerId }, select: { id: true } },
   };
 }
 
@@ -116,6 +118,7 @@ async function updateProfile(userId, fields) {
   if (fields.linkedinUrl  !== undefined) allowed.linkedinUrl  = fields.linkedinUrl;
   if (fields.portfolioUrl !== undefined) allowed.portfolioUrl = fields.portfolioUrl;
   if (Array.isArray(fields.skills))      allowed.skills       = fields.skills;
+  if (['normal', 'competitive', 'harsh'].includes(fields.mode)) allowed.mode = fields.mode;
 
   const user = await prisma.user.update({ where: { id: userId }, data: allowed });
   return formatUser(user);
@@ -340,6 +343,16 @@ async function likePost(userId, postId) {
   return { liked: true };
 }
 
+async function bookmarkPost(userId, postId) {
+  const existing = await prisma.postBookmark.findFirst({ where: { userId, postId } });
+  if (existing) {
+    await prisma.postBookmark.delete({ where: { id: existing.id } });
+    return { bookmarked: false };
+  }
+  await prisma.postBookmark.create({ data: { userId, postId } });
+  return { bookmarked: true };
+}
+
 async function addComment(userId, postId, content) {
   const comment = await prisma.postComment.create({
     data:    { userId, postId, content },
@@ -407,6 +420,7 @@ module.exports = {
   createPost,
   deletePost,
   likePost,
+  bookmarkPost,
   addComment,
   getComments,
   createHighlight,

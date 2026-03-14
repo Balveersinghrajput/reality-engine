@@ -46,6 +46,7 @@ router.post  ('/posts',              postUpload.single('media'), userController.
 router.get   ('/posts',              userController.getMyPosts);
 router.delete('/posts/:id',          userController.deletePost);
 router.post  ('/posts/:id/like',     userController.likePost);
+router.post  ('/posts/:id/bookmark', userController.bookmarkPost);
 router.post  ('/posts/:id/comments', userController.addComment);
 router.get   ('/posts/:id/comments', userController.getComments);
 

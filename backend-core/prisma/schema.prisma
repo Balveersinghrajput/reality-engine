@@ -54,6 +54,7 @@ model User {
   taskResults           TaskResult[]
   posts                 Post[]
   postLikes             PostLike[]
+  postBookmarks         PostBookmark[]
   postComments          PostComment[]
   highlights            Highlight[]
   scheduledTestAttempts ScheduledTestAttempt[]
@@ -434,6 +435,7 @@ model Post {
 
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes    PostLike[]
+  bookmarks PostBookmark[]
   comments PostComment[]
 
   @@index([userId])
@@ -448,6 +450,18 @@ model PostLike {
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId])
+}
+
+model PostBookmark {
+  id     String @id @default(cuid())
+  userId String
+  postId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
 }
 
 model PostComment {

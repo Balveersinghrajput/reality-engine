@@ -241,7 +241,14 @@ function PostModal({ post, isOwn, onClose, onLike, onBookmark, onDelete, usernam
 }
 
 function EditModal({ data, onClose, onSave }: { data: any; onClose: () => void; onSave: (d: any) => void }) {
-  const [form, setForm] = useState({ bio: data?.bio || '', githubUrl: data?.githubUrl || '', linkedinUrl: data?.linkedinUrl || '', portfolioUrl: data?.portfolioUrl || '', skills: (data?.skills || []).join(', ') })
+  const [form, setForm] = useState({ bio: data?.bio || '', githubUrl: data?.githubUrl || '', linkedinUrl: data?.linkedinUrl || '', portfolioUrl: data?.portfolioUrl || '', skills: (data?.skills || []).join(', '), mode: data?.mode || 'normal' })
+
+  const MODES = [
+    { value: 'normal',      label: 'Normal',      desc: 'Balanced learning pace',          color: '#22c55e' },
+    { value: 'competitive', label: 'Competitive',  desc: 'Push harder, climb the ranks',    color: '#3b82f6' },
+    { value: 'harsh',       label: 'Harsh',        desc: 'No excuses — maximum intensity',  color: '#ef4444' },
+  ]
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.92)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(8px)' }}>
       <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 20, padding: 24, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}>
@@ -263,6 +270,18 @@ function EditModal({ data, onClose, onSave }: { data: any; onClose: () => void; 
               : <input value={(form as any)[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '10px 12px', color: '#e5e7eb', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'Syne, sans-serif' }} />}
           </div>
         ))}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 10, color: '#555', marginBottom: 8, fontFamily: 'monospace', letterSpacing: 1, textTransform: 'uppercase' }}>Training Mode</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {MODES.map(m => (
+              <button key={m.value} onClick={() => setForm(p => ({ ...p, mode: m.value }))}
+                style={{ flex: 1, padding: '10px 8px', background: form.mode === m.value ? `${m.color}15` : 'rgba(255,255,255,.02)', border: `1px solid ${form.mode === m.value ? `${m.color}40` : '#1a1a1a'}`, borderRadius: 10, cursor: 'pointer', textAlign: 'center', transition: 'all .15s' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: form.mode === m.value ? m.color : '#555', fontFamily: 'Syne, sans-serif', marginBottom: 3 }}>{m.label}</div>
+                <div style={{ fontSize: 9, color: form.mode === m.value ? `${m.color}99` : '#404040', fontFamily: 'monospace', lineHeight: 1.4 }}>{m.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '11px', background: 'rgba(255,255,255,.04)', border: '1px solid #1a1a1a', borderRadius: 10, color: '#555', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Cancel</button>
           <button onClick={() => onSave({ ...form, skills: form.skills.split(',').map((s: string) => s.trim()).filter(Boolean) })} style={{ flex: 1, padding: '11px', background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.35)', borderRadius: 10, color: '#3b82f6', cursor: 'pointer', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Save size={14} /> Save</button>
